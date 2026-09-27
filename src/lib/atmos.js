@@ -1,0 +1,60 @@
+/* 氛围: one mood for the whole room for one day.
+   rain   — someone activated 雷公 (6) today
+   snow / dusk / night — scheduled: two of the middle days of a trip, chosen from the trip id
+   fire   — the last day
+   Nothing here changes data; it only changes how today looks and sounds. */
+import { api, on } from "./api.js";
+import { today, hash, buzz } from "./util.js";
+import { mus, sfx } from "./sound.js";
+import { tripDays } from "../pages/trip.js";
+
+export const ATMOS = {
+  rain: { name: "雷公 · 催雨", zh: "今天下雨", hint: "雷公在。整个房间今天都是雨天。" },
+  snow: { name: "雪女 · 落雪", zh: "今天下雪", hint: "雪女经过。翻页会踩到雪。" },
+  dusk: { name: "夸父 · 追日", zh: "今天是黄昏", hint: "夸父追着太阳，天一直是傍晚。" },
+  night: { name: "烛龙 · 长夜", zh: "今天是长夜", hint: "烛龙闭上眼，今天没有白天。" },
+  fire: { name: "祝融 · 焰火", zh: "最后一天", hint: "祝融在。每完成一件事，就放一朵烟花。" }
+};
+let current = null, canvas = null, raf = 0, parts = [];
+export function scheduled(date = today()) {
+  const t = api.trip; if (!t) return null; const days = tripDays(); if (days.length < 3) return date === days[days.length - 1] ? "fire" : null;
+  if (date === days[days.length - 1]) return "fire";
+  const mid = days.slice(1, -1), h = hash(t.id + "atmos"), pool = ["snow", "dusk", "night"];
+  const pick = new Set(); if (mid.length >= 2) { const a = h % mid.length; let b = (h >>> 5) % mid.length; if (b === a) b = (a + 1 + ((h >>> 11) % (mid.length - 1))) % mid.length; pick.add(mid[a]); pick.add(mid[b]); }
+  const arr = [...pick]; const i = arr.indexOf(date); if (i < 0) return null; const first = (h >>> 9) % pool.length; return pool[(first + i * (1 + ((h >>> 13) % 2))) % pool.length];
+}
+export async function todaysAtmos() {
+  const d = today(); let rain = false;
+  try { rain = (await api.deckTable(d)).some(x => x.card === "6" && x.status === "activated"); } catch (e) {}
+  return rain ? "rain" : scheduled(d);
+}
+export function current_() { return current; }
+export async function refresh() { const a = api.trip ? await todaysAtmos() : null; apply(a); }
+function apply(a) {
+  if (a === current) return; current = a;
+  document.body.classList.remove("atm-rain", "atm-snow", "atm-dusk", "atm-night", "atm-fire"); if (a) document.body.classList.add("atm-" + a);
+  stop(); if (a === "rain" || a === "snow") start(a);
+  if (a === "rain") { setTimeout(() => { buzz([40, 60, 80]); mus.whoosh(); }, 300); }
+  document.dispatchEvent(new CustomEvent("atmos", { detail: a }));
+}
+function start(kind) {
+  canvas = document.createElement("canvas"); canvas.className = "atm-cv"; document.body.appendChild(canvas);
+  const x = canvas.getContext("2d"); let w = 0, h = 0; const size = () => { w = canvas.width = innerWidth; h = canvas.height = innerHeight; }; size(); addEventListener("resize", size);
+  parts = Array.from({ length: kind === "snow" ? 110 : 140 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, v: kind === "snow" ? .5 + Math.random() * 1 : 7 + Math.random() * 6, r: kind === "snow" ? 1.6 + Math.random() * 3 : 0, d: Math.random() * 6.28 }));
+  let t = 0; const loop = () => { t += .016; x.clearRect(0, 0, w, h);
+    if (kind === "snow") { x.fillStyle = "rgba(255,255,255,.95)"; x.shadowColor = "rgba(255,255,255,.6)"; x.shadowBlur = 4; parts.forEach(p => { p.y += p.v; p.x += Math.sin(t + p.d) * .3; if (p.y > h) { p.y = -4; p.x = Math.random() * w; } x.beginPath(); x.arc(p.x, p.y, p.r, 0, 7); x.fill(); }); }
+    else { x.strokeStyle = "rgba(47,58,46,.38)"; x.lineWidth = 1.2; parts.forEach(p => { p.y += p.v; p.x -= 1.2; if (p.y > h) { p.y = -14; p.x = Math.random() * w + 40; } x.beginPath(); x.moveTo(p.x, p.y); x.lineTo(p.x - 3, p.y + 18); x.stroke(); }); }
+    raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop);
+}
+function stop() { cancelAnimationFrame(raf); if (canvas) { canvas.remove(); canvas = null; } }
+/* 祝融: a little firework when something gets done on the last day */
+export function celebrate() {
+  if (current !== "fire") return;
+  const c = document.createElement("canvas"); c.className = "atm-cv"; document.body.appendChild(c); c.width = innerWidth; c.height = innerHeight; const x = c.getContext("2d");
+  const cx = innerWidth * (.3 + Math.random() * .4), cy = innerHeight * (.25 + Math.random() * .25), cols = ["#b3341e", "#e6d7a8", "#7c5b3a", "#f2f0e8"];
+  const ps = Array.from({ length: 60 }, (_, i) => { const a = i / 60 * 6.28, s = 2.4 + Math.random() * 2.4; return { x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s, c: cols[i % 4], l: 1 }; });
+  mus.pop(); setTimeout(() => mus.harp(4, 5, .05), 120); buzz([10, 30, 10]);
+  let n = 0; const loop = () => { n++; x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += .04; p.l -= .014; x.globalAlpha = Math.max(0, p.l); x.fillStyle = p.c; x.beginPath(); x.arc(p.x, p.y, 2.2, 0, 7); x.fill(); }); if (n < 80) requestAnimationFrame(loop); else c.remove(); }; requestAnimationFrame(loop);
+}
+on("trip", () => setTimeout(refresh, 300)); on("skill_log", refresh);
+if (typeof window !== "undefined") { window.tdCelebrate = celebrate; setTimeout(refresh, 800); setInterval(refresh, 60000); }

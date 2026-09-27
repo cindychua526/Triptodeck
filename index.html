@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f6f1e8">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="旅行手账">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trip Deck · 福建</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23e9e6dc'/><circle cx='50' cy='50' r='31' fill='none' stroke='%232f3a2e' stroke-width='7' stroke-dasharray='170 40' stroke-linecap='round' transform='rotate(-120 50 50)'/><rect x='70' y='70' width='7' height='7' fill='%23b3341e'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;600;800&family=Noto+Serif+SC:wght@300;400;500;600;700&family=Caveat:wght@500;600&family=Long+Cang&family=Special+Elite&family=JetBrains+Mono:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Cormorant+Garamond:ital,wght@0,300;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app">
+  <div class="pages">
+    <section class="page" id="pg-fortune">
+  <header>
+    <button class="avatar book-btn" id="bookBtn" aria-label="我的旅行手账">
+      <svg viewBox="0 0 44 44"><path d="M8 30 q6-4 12 0 q6 4 12 0 q4-3 6-1" stroke="#fff" stroke-width="2" fill="none"/><g transform="rotate(-25 22 20)"><path d="M10 20 C10 18 13 18 16 18 H30 C34 18 36 19 36 20 C36 21 34 22 30 22 H16 C13 22 10 22 10 20Z" fill="#fff" stroke="#5c7fb3" stroke-width="1.2"/><path d="M22 18 L16 10 H20 L27 18Z M22 22 L16 30 H20 L27 22Z" fill="#6f95cf"/></g></svg>
+    </button>
+    <div class="hello"><b id="greet">Hi,</b><span id="bookName">今天想去哪儿走走？</span></div>
+    <div class="date"><strong id="dNum"></strong><span id="dWeek"></span></div>
+  </header>
+  <div id="arriveBanner" class="arrive-wrap"></div>
+  <div id="todayStrip" class="today-strip"></div>
+
+  <div class="wrap">
+    <div class="stage" id="stage">
+      <div class="card" id="card">
+        <div class="tilt" id="tilt">
+          <div class="flip">
+            <div class="face front">
+              <div class="glare"></div>
+              <div class="emblem" id="emblem"></div>
+              <div class="postmark"><small>旅途愉快</small><b id="lvl">大吉</b><small id="pmDate"></small></div>
+              <div class="flip-tip"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 8a6 6 0 0 1 11-2M16 12a6 6 0 0 1-11 2"/><path d="M15 2v4h-4M5 18v-4h4"/></svg>翻面</div>
+              <div class="title" id="title"></div>
+              <div class="pinyin" id="pinyin"></div>
+              <div class="info" id="info"></div>
+              <div class="bottom"><div class="ratings" id="ratings"></div><p class="msg" id="msg"></p></div>
+            </div>
+            <div class="face back" id="back">
+              <div class="back-head"><h3>今日打卡任务</h3><p class="dest" id="dest"></p></div>
+              <div class="perf"></div>
+              <div class="tasks" id="tasks"></div>
+              <div class="stampzone"><span id="szTip"></span><div class="bigstamp" id="bigstamp"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sleeve" id="sleeve">
+        <svg viewBox="0 0 320 448" aria-hidden="true">
+          <defs>
+            <clipPath id="sleeveClip"><path id="sp" d="M14 0 H108 Q120 0 122 12 A38 38 0 0 0 198 12 Q200 0 212 0 H306 Q320 0 320 14 V434 Q320 448 306 448 H14 Q0 448 0 434 V14 Q0 0 14 0 Z"/></clipPath>
+            <linearGradient id="kg" x1="0" y1="0" x2="0.3" y2="1"><stop offset="0" stop-color="#cfa676"/><stop offset="1" stop-color="#b98c5c"/></linearGradient>
+            <filter id="grain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" seed="4"/><feColorMatrix values="0 0 0 0 .3  0 0 0 0 .18  0 0 0 0 .08  0 0 0 1.4 -.55"/></filter>
+            <filter id="fiber" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".015 .35" numOctaves="2" seed="9"/><feColorMatrix values="0 0 0 0 .98  0 0 0 0 .9  0 0 0 0 .75  0 0 0 1.1 -.5"/></filter>
+            <filter id="tagShadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#5a3a1a" flood-opacity=".35"/></filter>
+          </defs>
+          <g clip-path="url(#sleeveClip)">
+            <rect width="320" height="448" fill="url(#kg)"/>
+            <rect width="320" height="448" filter="url(#grain)" opacity=".55"/>
+            <rect width="320" height="448" filter="url(#fiber)" opacity=".3"/>
+            <path d="M40 420 C 90 360, 150 400, 200 350" stroke="rgba(253,244,226,.45)" stroke-width="1.5" stroke-dasharray="4 6" fill="none"/>
+          </g>
+          <use href="#sp" fill="none" stroke="rgba(90,55,25,.25)" stroke-width="1.5"/>
+          <g class="rope">
+            <path class="rope-line" pathLength="100" d="M-8 247 Q160 254 328 243" stroke="#8a6238" stroke-width="3.6" opacity=".35" transform="translate(0 1.5)"/>
+            <path class="rope-line" pathLength="100" d="M-8 247 Q160 254 328 243" stroke="#f1dcb2" stroke-width="3"/>
+            <path class="rope-line" pathLength="100" d="M-6 256 Q160 260 326 251" stroke="#f1dcb2" stroke-width="2.6"/>
+            <g class="bow">
+              <g fill="none" stroke="#f1dcb2" stroke-width="3" stroke-linecap="round">
+                <path d="M236 250 C 200 262, 186 300, 204 310 C 222 318, 232 286, 236 250"/>
+                <path d="M236 250 C 266 264, 286 300, 270 312 C 254 322, 242 286, 236 250"/>
+                <path d="M234 253 C 224 300, 206 342, 190 376"/>
+                <path d="M238 253 C 246 300, 252 336, 262 364"/>
+                <path d="M236 250 L 246 270"/>
+              </g>
+              <g filter="url(#tagShadow)" transform="translate(248 292)" fill="#fbf3e3">
+                <circle cx="0" cy="-12" r="16"/><circle cx="-15" cy="-3" r="14"/><circle cx="15" cy="-3" r="14"/>
+                <circle cx="-10" cy="12" r="14"/><circle cx="10" cy="12" r="14"/><circle cx="0" cy="2" r="18"/>
+              </g>
+              <circle cx="246" cy="274" r="2.2" fill="#c59a6a"/>
+              <text x="248" y="296" text-anchor="middle" dominant-baseline="central" font-family="Ma Shan Zheng, STKaiti, cursive" font-size="30" fill="#a8683a">旅</text>
+            </g>
+          </g>
+        </svg>
+        <div class="sleeve-text">
+          <div class="s-post"><span>Travel</span><b id="sPostDate"></b><span>Post</span></div>
+          <svg class="s-waves" viewBox="0 0 90 24" fill="none" stroke="rgba(253,244,226,.8)" stroke-width="1.4"><path d="M0 4 q7.5-4 15 0 t15 0 t15 0 t15 0 t15 0 t15 0"/><path d="M0 12 q7.5-4 15 0 t15 0 t15 0 t15 0 t15 0 t15 0"/><path d="M0 20 q7.5-4 15 0 t15 0 t15 0 t15 0 t15 0 t15 0"/></svg>
+          <div class="s-en">Travel<br>Fortune</div>
+          <div class="s-stamp"><span>行</span></div>
+          <div class="s-title">今日旅运</div>
+          <div class="s-cols"><span>带一份好奇</span><span>赴一场远方</span></div>
+          <div class="s-date" id="sDate"></div>
+        </div>
+        <div class="pulse"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer id="footer">
+    <button class="close" id="closeBtn" aria-label="收起卡片">
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+    </button>
+    <div class="hint" id="hint"></div>
+    <div class="count" id="count"></div>
+  </footer>
+    </section>
+
+    
+    <section class="page" id="pg-trip"><div class="pg-scroll" id="tripRoot"></div></section>
+    <section class="page" id="pg-play"><div class="pg-scroll" id="playRoot"></div></section>
+    <section class="page" id="pg-deck"><div class="pg-scroll" id="deckRoot"></div></section>
+    <section class="page" id="pg-coin"><div class="pg-scroll" id="coinRoot"></div></section>
+    <section class="page" id="pg-tear">
+      <div class="sk-top"><button class="icon-btn" data-back aria-label="返回"><i data-ic="arrow-left"></i> 返回</button><button class="icon-btn snd" aria-label="音效"><i data-ic="speaker-high"></i></button></div>
+      <div class="ph" style="padding-top:4px"><h2>撕一张美食票</h2><p>吃到当地的好东西，就把它的票撕下来收进票夹</p></div>
+      <div class="cities" id="countries"></div>
+      <div class="cities sub" id="cities"></div>
+      <div class="spots" id="spots"></div>
+      <div class="scene" id="scene">
+        <div class="rig" id="rig">
+          <div class="floor"></div>
+          <div class="roll"><div class="roll-body"><div class="roll-print" id="rollPrint"></div><div class="roll-shade"></div></div><div class="roll-top"></div></div>
+          <div class="strip-wrap"><div class="strip" id="strip"><div class="tape" id="tape"></div></div></div>
+          <div class="grab" id="grab"></div>
+        </div>
+      </div>
+      <div class="food-info" id="foodInfo"></div>
+      <div class="tear-ctl">
+        <button class="btn solid" id="tearBtn">撕一张打卡票</button>
+        <div class="count" id="tearHint">也可以按住票的一角往右拉</div>
+      </div>
+    </section>
+
+    
+    <section class="page" id="pg-collect">
+      <div class="pg-scroll" id="bookRoot"></div>
+      <div id="walletHost" hidden><div class="col-pane" id="colWallet">
+        <p class="col-note" id="wSub"></p>
+        <div class="w-prog"><i id="wBar"></i></div>
+        <div class="w-countries" id="wCountries"></div>
+        <div class="w-cities" id="wCities"></div>
+        <div class="w-list" id="wList"></div>
+      </div></div>
+    </section>
+    <section class="page" id="pg-budget"><div class="pg-scroll" id="budgetRoot"></div></section>
+  </div>
+  <nav class="tabs" aria-label="页面">
+    <button class="tab" data-p="fortune" id="tab-fortune"><i data-ic="calendar-blank"></i>今日</button>
+    <button class="tab" data-p="trip" id="tab-trip"><i data-ic="map-trifold"></i>行程</button>
+    <button class="tab" data-p="play" id="tab-play"><i data-ic="cards"></i>玩法</button>
+    <button class="tab" data-p="collect" id="tab-collect"><i data-ic="book-open-text"></i>手账<span class="badge" id="badge"></span></button>
+    <button class="tab" data-p="budget" id="tab-budget"><i data-ic="wallet"></i>账本</button>
+  </nav>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="sheet" id="sheet"></div>
+<div class="toast" id="toast"></div>
+<div id="onboard"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
