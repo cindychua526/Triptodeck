@@ -20,5 +20,5 @@ export function setSheet(html) { sheetEl.innerHTML = html; return sheetEl; }
 export function lockSheet(v) { sheetEl.dataset.lock = v ? "1" : ""; }
 export function closeSheet() { sheetEl.classList.remove("on"); ovEl.classList.remove("on"); const f = onClose; onClose = null; f && f(); }
 export const sheetOpen = () => sheetEl.classList.contains("on");
-export function toast(msg, ms = 2600) { toastEl.textContent = msg; toastEl.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => toastEl.classList.remove("on"), ms); }
+export function toast(msg, ms = Math.max(4200, String(msg).length * 160)) { toastEl.textContent = msg; toastEl.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => toastEl.classList.remove("on"), ms); }
 export function bind(root, map) { root.querySelectorAll("[data-act]").forEach(b => { const f = map[b.dataset.act]; if (f) b.onclick = e => f(b, e); }); }

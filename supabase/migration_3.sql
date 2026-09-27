@@ -83,3 +83,9 @@ do $$ begin
 -- 8) delete a book: the person who created the trip can delete it for everyone (everything inside goes with it)
 drop policy if exists "trips delete" on trips;
 create policy "trips delete" on trips for delete to authenticated using (created_by = auth.uid());
+
+-- 9) 拍立得: a line of writing under every photo (check-in photos, food photos, shared photos)
+alter table stamps add column if not exists caption text;
+alter table food_photos add column if not exists caption text;
+drop policy if exists "food photos edit" on food_photos; create policy "food photos edit" on food_photos for update to authenticated using (user_id = auth.uid());
+drop policy if exists "shared edit" on shared_photos; create policy "shared edit" on shared_photos for update to authenticated using (user_id = auth.uid());

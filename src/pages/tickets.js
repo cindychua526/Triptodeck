@@ -21,15 +21,19 @@ const today=todayFn;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const buzz=p=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} };
 let wallet=[];
-export async function loadWallet(){ try{ const rows=await api.wallet(); wallet=rows.map(r=>({id:r.spot_id,date:r.date,serial:r.serial,rating:r.rating||null,note:r.note||null,t:Date.parse(r.created_at||0)||0})).sort((a,b)=>a.t-b.t); }catch(e){ console.warn(e); } renderWallet(); updateBadge(); renderSpots(); }
+export async function loadWallet(){ loadFoodPhotoUrls().then(()=>{ try{ renderSpots(); }catch(e){} }); try{ const rows=await api.wallet(); wallet=rows.map(r=>({id:r.spot_id,date:r.date,serial:r.serial,rating:r.rating||null,note:r.note||null,t:Date.parse(r.created_at||0)||0})).sort((a,b)=>a.t-b.t); }catch(e){ console.warn(e); } renderWallet(); updateBadge(); renderSpots(); }
 function persistOne(w){ const sp=spotById(w.id); api.putWallet({spot_id:w.id,date:w.date,serial:w.serial,rating:w.rating||null,note:w.note||null,city:sp?CITY[sp.c].name:null}).catch(()=>toast("票夹没能同步，请检查网络")); }
 /* ---------- helpers ---------- */
 const spotById=id=>SPOTS.find(s=>s.id===id);
 const inWallet=id=>wallet.find(w=>w.id===id);
 const countryOf=s=>CITY[s.c].k;
-function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("on"),2600); }
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.classList.add("on"); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("on"),Math.max(4200,String(msg).length*160)); }
 function dist(a,b,c,d){ const R=6371,r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2; return 2*R*Math.asin(Math.sqrt(x)); }
 
+const PHOTO={};
+export async function loadFoodPhotoUrls(){ let L=[]; try{ L=await api.foodPhotos(); }catch(e){ return; } const pick={}; L.forEach(p=>{ const cur=pick[p.food]; if(!cur||(p.user_id===api.me.id&&cur.user_id!==api.me.id)||(p.user_id===cur.user_id&&String(p.created_at)>String(cur.created_at))) pick[p.food]=p; });
+  await Promise.all(Object.entries(pick).map(async([f,p])=>{ try{ const u=p.photo_path.startsWith("data:")?p.photo_path:await api.sharedUrl(p.photo_path); if(u) PHOTO[f]=u; }catch(e){} })); }
+const artOrPhoto=(name,cls)=>PHOTO[name]?`<div class="${cls} photo" style="background-image:url('${PHOTO[name]}')"></div>`:`<div class="${cls}">${foodArt(name)}</div>`;
 function frontHTML(s,meta,tw){
   const c=CITY[s.c], k=COUNTRY[c.k];
   return `<div class="tk" style="--c:${c.color};--tw:${tw}px">
@@ -38,8 +42,8 @@ function frontHTML(s,meta,tw){
       <div class="tk-name${s.name.length>9?" xlong":s.name.length>5?" long":""}">${s.name}</div>
       <div class="tk-en">${s.en}</div>
       <p class="tk-mean">${s.mean}</p>
-      <div class="tk-foot"><span>${meta.date.replace(/-/g,".")}</span><em>${s.tag}</em></div>
-      <div class="tk-food">${foodArt(s.name)}</div>
+      <div class="tk-foot"><span>${meta.date.replace(/-/g,".")}</span>${s.tag&&s.tag!=="美食"?`<em>${s.tag}</em>`:""}</div>
+      ${artOrPhoto(s.name,"tk-food")}
     </div>
     <div class="tk-stub"><b>尝过了</b><small>${c.name}</small></div>${meta.rating?`<div class="tk-rate r-${meta.rating}">${RATE[meta.rating][0]}</div>`:""}
   </div>`;
@@ -95,7 +99,7 @@ function renderSpots(){
   const box=$("spots"); if(!box) return;
   box.innerHTML=SPOTS.filter(s=>s.c===city).map(s=>`<button class="spot${spot&&s.id===spot.id?" on":""}" data-id="${s.id}" style="--c:${CITY[s.c].color}">
     ${inWallet(s.id)?'<span class="got">✓</span>':''}
-    <span class="spot-art">${foodArt(s.name)}</span><b>${s.name}</b><small>${inWallet(s.id)&&inWallet(s.id).rating?RATE[inWallet(s.id).rating][1]+" "+RATE[inWallet(s.id).rating][0]:s.tag}</small></button>`).join("");
+    ${PHOTO[s.name]?`<span class="spot-art photo" style="background-image:url('${PHOTO[s.name]}')"></span>`:`<span class="spot-art">${foodArt(s.name)}</span>`}<b>${s.name}</b>${inWallet(s.id)?`<i class="spot-got${inWallet(s.id).rating?" r-"+inWallet(s.id).rating:""}">${inWallet(s.id).rating==="love"?"♥":"✓"}</i>`:""}</button>`).join("");
   box.querySelectorAll(".spot").forEach(b=>b.onclick=()=>setSpot(b.dataset.id));
 }
 function setSpot(id){
@@ -187,7 +191,7 @@ function openSheet(fromWallet, inSheet){
   const {s,meta,again}=cur, c=CITY[s.c], k=COUNTRY[c.k], sh=$("sheet");
   sh.style.setProperty("--c",c.color);
   const near=located?`，距你约 ${dist(located.lat,located.lng,s.lat,s.lng).toFixed(1)} 公里`:"";
-  sh.innerHTML=`<div class="sh-tag"><i></i>${k.flag} ${k.name} ${c.name}　${s.tag}</div>
+  sh.innerHTML=`<div class="sh-tag"><i></i>${c.name}${s.tag&&s.tag!=="美食"?"　"+s.tag:""}</div>
     <h3>${s.name}</h3>
     <div class="sh-block"><b>是什么</b><p>${s.mean}</p></div>
     ${s.where?`<div class="sh-block"><b>去哪吃</b><p>${s.where}</p></div>`:""}
@@ -200,7 +204,7 @@ function openSheet(fromWallet, inSheet){
       :`<button class="btn" id="shAgain">放回去</button><button class="btn solid" id="shSave">${again?"更新打卡日期":"收进票夹"}</button>`}</div>`;
   requestAnimationFrame(()=>sh.classList.add("on"));
   foodPhotosInto($("shPhotos"), s.name, c.name);
-  $("shPhotoIn").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const small=await shrinkImage(f, api.mode==="local"?600:1280, .8); const path=api.mode==="local"?small:await api.uploadShared(dataUrlToBlob(small)); await api.addFoodPhoto({ food:s.name, city:c.name, date:todayFn(), photo_path:path }); toast("照片放进大家的手帐了"); foodPhotosInto($("shPhotos"), s.name, c.name); }catch(err){ toast("没能上传："+err.message); } };
+  $("shPhotoIn").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const small=await shrinkImage(f, api.mode==="local"?600:1280, .8); const path=api.mode==="local"?small:await api.uploadShared(dataUrlToBlob(small)); loadFoodPhotoUrls.later=true; await api.addFoodPhoto({ food:s.name, city:c.name, date:todayFn(), photo_path:path }); toast("照片放进大家的手帐了"); foodPhotosInto($("shPhotos"), s.name, c.name); }catch(err){ toast("没能上传："+err.message); } };
   if(fromWallet){
     sh.querySelectorAll("[data-rate]").forEach(b=>b.onclick=()=>{ const w=inWallet(s.id); if(!w) return; w.rating=w.rating===b.dataset.rate?null:b.dataset.rate; persistOne(w); sh.querySelectorAll("[data-rate]").forEach(x=>{ x.classList.toggle("on",x.dataset.rate===w.rating); x.setAttribute("aria-checked",x.dataset.rate===w.rating); }); sfx.tap(); renderWallet(); });
     if(inSheet){ sh.insertAdjacentHTML("afterbegin",`<div class="sh-ticket">${frontHTML(s,meta,Math.min(innerWidth*0.86,360))}</div>`); sh.classList.add("with-ticket"); }
@@ -356,3 +360,5 @@ async function exportWallet(items){
   try{ const raw=await toPng(sheet,{pixelRatio:3,cacheBust:true,backgroundColor:"#f6f1e8"}); const blob=await (await fetch(raw)).blob(), f=new File([blob],"food-tickets.png",{type:"image/png"}); if(navigator.canShare&&navigator.canShare({files:[f]})) await navigator.share({files:[f]}); else { const a=document.createElement("a"); a.href=raw; a.download=f.name; a.click(); } }catch(e){ toastU("没能生成："+e.message); } finally{ sheet.remove(); }
 }
 export const walletItems=()=>wallet.filter(w=>spotById(w.id)).map(w=>({...w, name:spotById(w.id).name, city:(CITY[spotById(w.id).c]||{}).name}));
+
+api && import("../lib/api.js").then(m=>m.on("food_photos",()=>loadFoodPhotoUrls().then(()=>{ try{ renderSpots(); if(document.querySelector("#wList")) renderWallet(); }catch(e){} })));

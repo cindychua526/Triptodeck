@@ -1,4 +1,5 @@
 import { api } from "../lib/api.js";
+import { ic } from "../lib/icons.js";
 import { CARD } from "../data/skills.js";
 import { esc } from "../lib/util.js";
 import { $ } from "../lib/util.js";
@@ -8,7 +9,7 @@ import { foodArt } from "../data/foodart.js";
 import { doodle } from "../data/doodles.js";
 export function renderPlay(go) {
   const root = $("playRoot");
-  root.innerHTML = `<div class="ph"><small class="ph-k">THE PLAYBOOK</small><h2>玩法</h2><p>让行程慢下来，多一点记忆点。</p></div>
+  root.innerHTML = `<div class="ph ph-row"><div><small class="ph-k">THE PLAYBOOK</small><h2>玩法</h2><p>让行程慢下来，多一点记忆点。</p></div><button class="bell" aria-label="动态">${ic("bell")}<span class="bell-n"></span></button></div>
     <div id="playLive"></div>
     <div class="hub2">
       <button class="hub-t" data-go="deck"><span class="ht-frame"></span><div class="ht-art fan">${["K", "Q", "10"].map(k => cardHTML(k, { cls: "mini" })).join("")}</div>
@@ -28,7 +29,6 @@ async function paintLive() {
   let atm = null; try { atm = await A.todaysAtmos(); } catch (e) {}
   const L = N.list().filter(l => l.action !== "DRAWN").slice(0, 8), unread = N.unread();
   el.innerHTML = `${atm ? `<div class="atm-card"><small>今日氛围牌 · 自动出现，不用抽</small><b>${A.ATMOS[atm].name}</b><span>${A.ATMOS[atm].hint}</span></div>` : ""}
-    ${N.countdownHTML()}
-    ${L.length ? `<div class="notices"><div class="sk-sec-h">LIVE <b>大家在做什么</b>${unread ? `<i class="nb">${unread}</i>` : ""}</div>${L.map(l => `<div class="nt-row${Date.parse(l.created_at) > (+localStorage.getItem("td-seen-log:" + api.trip.id) || 0) ? " new" : ""}"><b>${l.card && CARD[l.card] ? l.card : "·"}</b><span>${esc(N.line(l))}</span><time>${new Date(l.created_at).toTimeString().slice(0, 5)}</time></div>`).join("")}</div>` : ""}`;
-  N.markRead();
+    ${N.countdownHTML()}`;
+  N.list && document.dispatchEvent(new CustomEvent("bellpaint"));
 }

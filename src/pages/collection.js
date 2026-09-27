@@ -12,8 +12,9 @@ import { mus } from "../lib/sound.js";
 const postageStamp = (name, city, date, kind) => posterStamp({ name, city, date, kind }, { cityEn: (guideFor(city) || {}).en });
 import { guideFor } from "../data/guides.js";
 import { makePoster } from "./poster.js";
+import { lookChips, bindLookChips } from "../lib/look.js";
 import { departuresOf } from "./arrive.js";
-import { tripDays, cityOf } from "./trip.js";
+import { tripDays, cityOf, dayActs as dayActsOf } from "./trip.js";
 import { openFlipbook } from "./flipbook.js";
 import { t as T } from "../lib/i18n.js";
 import { openReceipt } from "./receipt.js";
@@ -60,12 +61,13 @@ export function renderBook() {
       <button class="bk2-t" data-open="shared"><span class="bk2-pv sh" id="bk2Shared"><i class="bk2-empty">${doodle("camera", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i></span><span class="bk2-l"><b>${T("大家的相册", "Everyone's photos")}</b><small id="bk2SharedN">${T("房间里每个人都看得到", "Everyone in the room")}</small></span></button>
     </div>
     <p class="col-note"><button class="linkbtn" data-act="how">${T("印章和邮票怎么收集？", "How do I collect stamps?")}</button></p>`;
+  if (!root.querySelector(".bk2-pv.al[data-bg]")) Promise.all([api.foodPhotos(), api.sharedPhotos()]).then(async ([F, S]) => { const m = [...F, ...S].filter(x => x.user_id === api.me.id).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0]; const al = root.querySelector(".bk2-pv.al"); if (m && al) { const u = await api.sharedUrl(m.photo_path); if (u && al.isConnected) { al.innerHTML = ""; al.style.backgroundImage = `url("${u}")`; } } }).catch(() => {});
   api.sharedPhotos().then(async L => { const el = $("bk2Shared"), n = $("bk2SharedN"); if (n) n.textContent = L.length ? `${L.length} 张 · 大家都看得到` : "房间里每个人都看得到"; if (el && L.length) { el.innerHTML = L.slice(0, 4).map(p => `<i class="bk2-sp" data-p="${esc(p.photo_path)}"></i>`).join(""); for (const d of el.querySelectorAll("[data-p]")) { const u = await api.sharedUrl(d.dataset.p); if (u && d.isConnected) d.style.backgroundImage = `url("${u}")`; } } }).catch(() => {});
   import("./tickets.js").then(m => { const W = (m.walletItems ? m.walletItems() : []).slice(-3), el = $("bk2Wallet"); if (el && W.length) el.innerHTML = W.map((w, i) => `<i class="bk2-stub" style="--i:${i}"><span>${foodArt(w.name)}</span><b>${esc(w.name)}</b></i>`).join(""); });
   import("../lib/journal.js").then(async m => { const J = await m.getJournal(t.id), txt = J.summary || Object.keys(J.days).sort().map(k => J.days[k]).filter(Boolean).pop() || ""; const el = $("bk2Diary"); if (el && txt) el.innerHTML = `<p>${esc(txt.slice(0, 60))}</p>`; });
   root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { sfx.click(); OPEN[b.dataset.open](); });
   root.querySelector("[data-act=lib]").onclick = () => openShelf();
-  root.querySelector("[data-act=poster]").onclick = poster;
+  root.querySelector("[data-act=poster]").onclick = openPoster;
   root.querySelector("[data-act=how]").onclick = () => { const sh = openSheet(`<div class="as"><small class="as-k">HOW TO COLLECT</small><h3>印章和邮票怎么收集</h3>
     <div class="how"><div><span>${citySeal("厦门", today())}</span><p><b>入境章</b>每到一座新城市，「今日」页会出现「抵达 · 盖入境章」，点一下盖上。一座城市一枚，盖在印章护照那座城市的第一页。</p></div>
     <div><span>${placeStamp("日光岩", "厦门", today())}</span><p><b>地点印章</b>到了行程里的地方，点它拍一张符合任务的照片，交给旅伴。任何一位旅伴确认后，印章就盖进印章护照。个人旅行拍完直接盖。</p></div>
@@ -76,7 +78,7 @@ export function renderBook() {
   const bg = root.querySelector("[data-bg]"); if (bg) api.photoUrl(bg.dataset.bg).then(u => { if (u && bg.isConnected) bg.style.backgroundImage = `url("${u}")`; });
   const wc = $("walletCount"); if (wc) api.wallet().then(w => { if (wc.isConnected) wc.textContent = w.filter(x => x.trip_id === t.id).length; }).catch(() => {});
 }
-export function openPoster() { poster(); }
+export function openPoster() { import("./poster2.js").then(m => m.openPosterStudio()); }
 function poster() {
   const t = api.trip, extra = {}; const me = departuresOf().find(d => d.user_id === api.me.id); if (me) extra.origin = me.origin;
   const segs = []; tripDays().forEach(d => { const c = cityOf(d), last = segs[segs.length - 1]; if (last && last.city === c) last.to = d; else segs.push({ city: c, from: d, to: d }); }); extra.segments = segs;
@@ -84,50 +86,74 @@ function poster() {
 }
 /* ---------- readers ---------- */
 const OPEN = {
-  passport() {
-    const ss = tripStamps(), t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id);
-    const cities = [...new Set(ss.map(s => s.city).filter(Boolean))];
-    const pages = [`<div class="pp-page cover" style="--c:${cover()}"><i class="pp-emb big">✦</i><small>THE TRIP DECK</small><b>PASSPORT</b><em>印章护照</em><span>${esc(t.name)}</span></div>`,
-      `<div class="pp-page id"><small>TRAVELLER · 持照人</small><h4>${esc(api.me.name)}</h4><dl><dt>旅行</dt><dd>${esc(t.name)}</dd><dt>日期</dt><dd>${shortDate(t.start_date)} – ${shortDate(t.end_date)}</dd><dt>出发地</dt><dd>${esc(dep ? dep.origin : "—")}</dd><dt>城市</dt><dd>${esc(cities.join("、") || "—")}</dd></dl><p class="mrz">P&lt;TRIPDECK&lt;&lt;${esc((t.name || "").replace(/\s/g, "").slice(0, 8))}&lt;&lt;&lt;&lt;${(t.start_date || "").replace(/-/g, "")}&lt;&lt;</p></div>`];
-    cities.forEach(c => {
+  async passport() {
+    const ss = tripStamps(), t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id), days = tripDays();
+    const cities = [...new Set([...days.map(d => cityOf(d)), ...ss.map(s => s.city)].filter(Boolean))];
+    let face = (ss.filter(x => x.photo_path).pop() || {}).photo_path || (dep && dep.photo_path) || null;
+    const hib = `<svg viewBox="0 0 100 100" class="pp-hib" fill="none" stroke="currentColor" stroke-width="1.6">${[0, 72, 144, 216, 288].map(r => `<path transform="rotate(${r} 50 50)" d="M50 50C38 40 36 18 50 10C64 18 62 40 50 50Z"/>`).join("")}<circle cx="50" cy="50" r="4.5"/><path d="M50 50L66 28"/><circle cx="67" cy="26" r="1.8" fill="currentColor"/><circle cx="71" cy="30" r="1.4" fill="currentColor"/><circle cx="63" cy="23" r="1.4" fill="currentColor"/><circle cx="50" cy="50" r="46" stroke-width=".8"/><circle cx="50" cy="50" r="42" stroke-width=".5"/></svg>`;
+    const chip = `<svg viewBox="0 0 40 26" class="pp-chip" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="1" width="38" height="24" rx="2"/><circle cx="20" cy="13" r="6"/><path d="M1 13h13M26 13h13"/></svg>`;
+    const mrz = (x => x.toUpperCase().replace(/[^A-Z0-9]/g, "<"))((api.me.name || "TRAVELLER").split("").map(c => /[a-z0-9]/i.test(c) ? c : "").join("") || "TRAVELLER");
+    const no = "TD" + String(hash(t.id) % 10000000).padStart(7, "0");
+    const g = `<i class="pp-gui"></i>`;
+    const pages = [
+      `<div class="pp-page mcover" data-noi18n><small class="mc-top">MALAYSIA · 马来西亚</small>${hib}<b class="mc-t1">PASPORT</b><b class="mc-t2">PASSPORT · 旅行护照</b>${chip}<span class="mc-trip">${esc(t.name)}</span><em class="mc-by">THE TRIP DECK</em></div>`,
+      `<div class="pp-page mdata" data-noi18n>${g}<div class="md-h"><b>PASPORT · PASSPORT</b><span>${no}</span></div>
+        <div class="md-body"><div class="md-ph pp-photo" ${face ? `data-cpath="${esc(face)}"` : ""}>${face ? "" : "<span>照片</span>"}</div>
+        <dl><dt>Nama / Name / 姓名</dt><dd>${esc(api.me.name)}</dd><dt>Perjalanan / Trip / 旅行</dt><dd>${esc(t.name)}</dd><dt>Tarikh / Dates / 日期</dt><dd>${shortDate(t.start_date)} – ${shortDate(t.end_date)}</dd><dt>Dari / From / 出发地</dt><dd>${esc(dep ? dep.origin : "—")}</dd><dt>Bandar / Cities / 城市</dt><dd>${esc(cities.join(" · ") || "—")}</dd></dl></div>
+        <div class="md-mrz">P&lt;TDK${mrz.padEnd(20, "<").slice(0, 20)}&lt;&lt;${String(ss.length).padStart(2, "0")}<br>${no}&lt;${(t.start_date || "").replace(/-/g, "").slice(2)}&lt;${(t.end_date || "").replace(/-/g, "").slice(2)}&lt;&lt;&lt;&lt;</div></div>`
+    ];
+    cities.forEach((c, ci) => {
       const seal = ss.find(s => s.kind === "city" && s.city === c), rest = ss.filter(s => s.kind !== "city" && s.city === c).sort((a, b) => a.date.localeCompare(b.date));
       for (let i = 0; i < Math.max(1, Math.ceil(rest.length / 6)); i++) {
         const chunk = rest.slice(i * 6, i * 6 + 6);
-        pages.push(`<div class="pp-page visa"><div class="pp-h"><b>${esc(c)}</b><small>${i ? "续页" : seal ? "入境 " + shortDate(seal.date) : "还没盖入境章"}</small></div>${!i && seal ? `<div class="pp-seal">${stampFor(seal)}</div>` : ""}
-          <div class="pp-grid">${chunk.map(s => `<div class="pp-st" style="--r:${(hash(s.id) % 25) - 12}deg">${stampFor(s)}</div>`).join("")}</div><span class="pp-no">${pages.length}</span></div>`);
+        pages.push(`<div class="pp-page mvisa" data-noi18n>${g}<div class="mv-h"><small>VISA · 签证 · ${String(pages.length).padStart(2, "0")}</small><b>${esc(c)}</b><span>${i ? "续页 · continued" : seal ? "入境 · Arrival " + shortDate(seal.date) : "还没盖入境章 · Not yet arrived"}</span></div>
+          ${!i ? (seal ? `<div class="mv-seal">${stampFor(seal)}</div>` : `<div class="mv-seal empty"><span>${esc(c)}</span><small>到了以后在「今日」点<br>「抵达${esc(c)} · 盖入境章」</small></div>`) : ""}
+          <div class="mv-grid">${chunk.map(s => `<div class="pp-st" style="--r:${(hash(s.id) % 25) - 12}deg">${stampFor(s)}</div>`).join("")}</div><span class="mv-no">${pages.length}</span></div>`);
       }
     });
-    pages.push(`<div class="pp-page visa blank"><div class="pp-h"><b>待盖章</b><small>下一个地方</small></div><p class="pp-empty">这一页留给下一段旅程。</p></div>`);
-    openFlipbook({ pages, theme: "passport", title: "印章护照" });
+    pages.push(`<div class="pp-page mvisa" data-noi18n>${g}<div class="mv-h"><small>VISA · 签证</small><b>下一站</b><span>This page is left for the next journey.</span></div><div class="mv-seal empty"><span>？</span><small>留给下一段旅程</small></div></div>`);
+    openFlipbook({ pages, theme: "passport", title: "印章护照", after: async ov => { for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
   },
   async album() {
-    let fp = []; try { fp = (await api.foodPhotos()).filter(x => x.user_id === api.me.id); } catch (e) {}
-    const ph = [...tripStamps().filter(s => s.photo_path), ...fp.map(f => ({ photo_path: f.photo_path, name: f.food, date: f.date, food: true }))], t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id);
+    let fp = [], sp = []; try { [fp, sp] = await Promise.all([api.foodPhotos(), api.sharedPhotos()]); } catch (e) {}
+    const mine = x => x.user_id === api.me.id;
+    const ph = [...tripStamps().filter(s => s.photo_path).map(s => ({ ...s, k: "stamp" })), ...fp.filter(mine).map(f => ({ id: f.id, photo_path: f.photo_path, name: f.food, date: f.date, caption: f.caption, k: "food" })), ...sp.filter(mine).map(f => ({ id: f.id, photo_path: f.photo_path, name: "", date: f.date, caption: f.caption, k: "shared" }))].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id), src = p => p.k === "stamp" || p.dep ? `data-cpath="${esc(p.photo_path)}"` : `data-spath="${esc(p.photo_path)}"`;
     const byDay = {}; ph.forEach(s => (byDay[s.date] = byDay[s.date] || []).push(s));
-    if (dep && dep.photo_path) (byDay[t.start_date] = byDay[t.start_date] || []).unshift({ photo_path: dep.photo_path, name: "出发", date: t.start_date, shared: true });
+    if (dep && dep.photo_path) (byDay[t.start_date] = byDay[t.start_date] || []).unshift({ photo_path: dep.photo_path, name: "出发", date: t.start_date, dep: true });
     const months = []; for (let d = t.start_date.slice(0, 7) + "-01"; d <= t.end_date; ) { months.push(d.slice(0, 7)); const [y, m] = d.split("-").map(Number); d = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`; }
     const MZ = ["", "一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"];
-    const pages = [`<div class="al-page cover"><small>ALBUM · 相册</small><b>${esc(t.name)}</b><em>${ph.length} 张照片</em></div>`, ...months.map(mo => {
+    const cov = ph.slice(-3).reverse();
+    const pages = [`<div class="al-page cover"><small>ALBUM · 相册</small><div class="al-cov">${cov.length ? cov.map((p, i) => `<i style="--i:${i}" ${src(p)}></i>`).join("") : `<em class="al-cov-empty">打卡、撕票、上传的照片<br>都会贴在这里</em>`}</div><b>${esc(t.name)}</b><em>${ph.length} 张照片</em><div class="al-looks"><small>滤镜 · 整本一起换</small>${lookChips()}</div></div>`, ...months.map(mo => {
       const [y, m] = mo.split("-").map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
       const cells = []; for (let i = 0; i < lead; i++) cells.push(`<div class="cal-c empty"></div>`);
       for (let d = 1; d <= n; d++) { const iso = `${mo}-${String(d).padStart(2, "0")}`, inTrip = iso >= t.start_date && iso <= t.end_date, p = byDay[iso];
-        cells.push(`<div class="cal-c${inTrip ? " trip" : ""}${p ? " has" : ""}" ${p ? `${p[0].food ? "data-spath" : "data-cpath"}="${esc(p[0].photo_path)}" data-day="${iso}"` : ""}><span>${d}</span>${p && p.length > 1 ? `<i>${p.length}</i>` : ""}</div>`); }
+        cells.push(`<div class="cal-c${inTrip ? " trip" : ""}${p ? " has" : ""}" ${p ? `${src(p[0])} data-day="${iso}"` : ""}><span>${d}</span>${p && p.length > 1 ? `<i>${p.length}</i>` : ""}</div>`); }
       return `<div class="al-page cal"><div class="cal-h"><b>${MZ[m]}</b><em>${y}</em><span>${String(m).padStart(2, "0")}</span></div><div class="cal-w">${"一二三四五六日".split("").map(x => `<span>${x}</span>`).join("")}</div><div class="cal-g">${cells.join("")}</div></div>`;
-    }), ...Object.keys(byDay).sort().map(d => `<div class="al-page day"><div class="cal-h"><b>${shortDate(d)}</b><em>${weekday(d)} · ${esc(cityOf(d))}</em></div><div class="day-ph">${byDay[d].map(s => `<figure><div class="dp" ${s.food ? "data-spath" : "data-cpath"}="${esc(s.photo_path)}"></div><figcaption>${esc(short(s.name))}</figcaption></figure>`).join("")}</div></div>`)];
-    openFlipbook({ pages, theme: "album", title: "相册", after: async ov => { for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } for (const el of ov.querySelectorAll("[data-spath]")) { const u = await api.sharedUrl(el.dataset.spath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
+    }), ...Object.keys(byDay).sort().map(d => `<div class="al-page day"><div class="cal-h"><b>${shortDate(d)}</b><em>${weekday(d)} · ${esc(cityOf(d))}</em></div><div class="day-ph">${byDay[d].map((s, i) => `<figure class="pola" style="--r:${((i * 37) % 9) - 4}deg"><div class="dp" ${src(s)}></div><figcaption ${s.id ? `data-cap="${s.k}:${s.id}"` : ""}>${esc(s.caption || short(s.name || "")) || `<span class="cap-hint">点这里写一句</span>`}</figcaption></figure>`).join("")}</div><p class="al-tip">点照片下面，写一句话。会一起印在海报上。</p></div>`)];
+    openFlipbook({ pages, theme: "album", title: "相册", after: async ov => {
+      bindLookChips(ov);
+      ov.querySelectorAll("[data-cap]").forEach(fc => fc.onclick = async e => { e.stopPropagation(); const [k, id] = fc.dataset.cap.split(":"), cur0 = fc.querySelector(".cap-hint") ? "" : fc.textContent; const v = prompt("在这张照片下面写一句", cur0); if (v === null) return; try { await api.setCaption(k, id, v.trim()); fc.innerHTML = esc(v.trim()) || `<span class="cap-hint">点这里写一句</span>`; mus.chime(4, .02); } catch (err) { toast("没能保存：" + err.message); } });
+      for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; }
+      for (const el of ov.querySelectorAll("[data-spath]")) { const u = await api.sharedUrl(el.dataset.spath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
   },
   archive() {
     const ss = tripStamps().filter(s => s.kind === "place" || s.kind === "special" || s.kind === "experience");
-    let color = localStorage.getItem("td-pouch") || "gold";
-    const ov = document.createElement("div"); ov.className = "arch"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "邮票集");
-    const draw = () => { ov.innerHTML = `<button class="sc-x" aria-label="关闭">×</button><div class="arch-in"><div class="arch-stage"><div class="arch-pouch p-${color}"><b>集めたもの</b><small>Mini Archive · ${esc(api.trip.name)}</small><i></i></div>
-        <div class="arch-fan">${ss.map((s, i) => `<button class="arch-st" data-sid="${s.id}" style="--i:${i};--n:${ss.length}">${postageStamp(s.name, s.city, s.date, s.kind)}</button>`).join("") || `<p class="arch-empty">还没有邮票。打卡通过后，每个地方会有一张。</p>`}</div></div>
-        <p class="arch-hint">${ss.length ? "点封套把邮票拉出来，点一张邮票慢慢看" : ""}</p><div class="arch-dots">${["gold", "rose", "ink"].map(c => `<button class="ad ad-${c}${c === color ? " on" : ""}" data-c="${c}" aria-label="${c}"></button>`).join("")}</div></div>`;
-      ov.querySelector(".sc-x").onclick = () => { ov.classList.remove("on"); setTimeout(() => ov.remove(), 350); renderBook(); };
-      ov.querySelector(".arch-pouch").onclick = () => { ov.classList.toggle("out"); sfx.paper(); };
-      ov.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { color = b.dataset.c; localStorage.setItem("td-pouch", color); const o = ov.classList.contains("out"); draw(); if (o) ov.classList.add("out"); sfx.tap(); });
-      ov.querySelectorAll("[data-sid]").forEach(b => b.onclick = e => { e.stopPropagation(); openStampViewer(ss, ss.findIndex(x => x.id === b.dataset.sid)); }); };
-    draw(); document.body.appendChild(ov); requestAnimationFrame(() => { ov.classList.add("on"); setTimeout(() => ov.classList.add("out"), 500); });
+    const days = tripDays(), cityOrder = [...new Set([...days.map(d => cityOf(d)), ...ss.map(s => s.city)].filter(Boolean))];
+    const planned = {}; days.forEach(d => { const c = cityOf(d); (dayActsOf(d) || []).filter(a => a.kind === "sight" && a.status !== "removed").forEach(a => { (planned[c] = planned[c] || new Set()).add(a.title); }); });
+    const sections = cityOrder.map(c => { const got = ss.filter(s => s.city === c), names = new Set(got.map(s => s.name)), todo = [...(planned[c] || [])].filter(n => !names.has(n) && ![...names].some(x => x.includes(n) || n.includes(x)));
+      return { c, got, todo }; }).filter(x => x.got.length || x.todo.length);
+    const total = sections.reduce((q, x) => q + x.got.length + x.todo.length, 0), have = ss.length;
+    const ov = document.createElement("div"); ov.className = "arch2"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "邮票集");
+    ov.innerHTML = `<button class="sc-x" aria-label="关闭">×</button><div class="a2-in"><small class="as-k">STAMP ALBUM · 集邮册</small><h2>邮票集</h2><p class="a2-sub">${esc(api.trip.name)} · 集到 ${have}${total > have ? ` / ${total}` : ""} 枚</p>
+      <p class="as-hint">每到一个地方打卡，你拍的那张照片就会变成这里的一枚邮票，盖上当天的邮戳。空着的格子是行程里还没去的地方。</p>
+      ${sections.map(x => `<div class="a2-city"><div class="a2-ch"><b>${esc(x.c)}</b><span>${x.got.length} 枚</span></div><div class="a2-grid">
+        ${x.got.map(s => `<button class="a2-st" data-sid="${s.id}">${s.photo_path ? `<i class="a2-ph" data-cpath="${esc(s.photo_path)}"></i>` : `<i class="a2-art">${postageStamp(s.name, s.city, s.date, s.kind)}</i>`}<b>${esc(short(s.name))}</b><svg class="a2-pm" viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="40" cy="40" r="25" fill="none" stroke="currentColor" stroke-width="1"/><text x="40" y="37" text-anchor="middle" font-size="10" fill="currentColor" font-family="Noto Serif SC,serif">${esc(x.c.slice(0, 3))}</text><text x="40" y="51" text-anchor="middle" font-size="9" fill="currentColor" font-family="Special Elite,monospace">${s.date.slice(5).replace("-", ".")}</text></svg></button>`).join("")}
+        ${x.todo.map(n => `<div class="a2-st empty"><span>${esc(short(n))}</span><small>还没去</small></div>`).join("")}</div></div>`).join("") || `<p class="arch-empty">还没有邮票。到一个地方打卡，拍一张，就会有第一枚。</p>`}</div>`;
+    ov.querySelector(".sc-x").onclick = () => { ov.classList.remove("on"); setTimeout(() => ov.remove(), 300); renderBook(); };
+    ov.querySelectorAll("[data-sid]").forEach(b => b.onclick = () => openStampViewer(ss, ss.findIndex(x => x.id === b.dataset.sid)));
+    document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add("on")); sfx.paper();
+    (async () => { for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } })();
   },
   wallet() {
     const ov = document.createElement("div"); ov.className = "showcase reader"; ov.innerHTML = `<button class="sc-x" aria-label="关闭">×</button><div class="rd-h"><small>FOOD TICKETS</small><b>美食票夹</b></div><div class="rd-body"></div>`;
@@ -199,7 +225,9 @@ export function openStampViewer(list, i = 0) {
   document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add("on")); mus.chime(2, .025); mus.chime(4, .02, .08);
   const card = ov.querySelector("#svCard"), holo = ov.querySelector("#svHolo"); let flipped = false, rx = 0, ry = 0;
   const show = (dir = 0) => { const st = list[i], f = favs();
-    ov.querySelector("#svFront").innerHTML = posterStamp(st, { no: i + 1, cityEn: (guideFor(st.city) || {}).en });
+    const fr = ov.querySelector("#svFront");
+    if (st.photo_path) { fr.innerHTML = `<div class="sv-photo"><i></i><b>${esc(st.name)}</b><em>${esc(st.city || "")} · ${(st.date || "").replace(/-/g, ".")}</em><svg class="a2-pm" viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="40" cy="40" r="25" fill="none" stroke="currentColor" stroke-width="1"/><text x="40" y="37" text-anchor="middle" font-size="10" fill="currentColor" font-family="Noto Serif SC,serif">${esc((st.city || "").slice(0, 3))}</text><text x="40" y="51" text-anchor="middle" font-size="9" fill="currentColor" font-family="Special Elite,monospace">${(st.date || "").slice(5).replace("-", ".")}</text></svg></div>`; api.photoUrl(st.photo_path).then(u => { const im = fr.querySelector(".sv-photo i"); if (u && im) im.style.backgroundImage = `url("${u}")`; }); }
+    else fr.innerHTML = posterStamp(st, { no: i + 1, cityEn: (guideFor(st.city) || {}).en });
     ov.querySelector("#svBack").innerHTML = `<div class="svb"><div class="svb-seal">${stampFor(st)}</div><dl><dt>${T("地点", "Place")}</dt><dd>${esc(st.name)}</dd><dt>${T("城市", "City")}</dt><dd>${esc(st.city || "")}</dd><dt>${T("日期", "Date")}</dt><dd>${shortDate(st.date)} ${weekday(st.date)}</dd>${st.mission ? `<dt>${T("任务", "Mission")}</dt><dd>${esc(st.mission)}</dd>` : ""}${st.verify_note ? `<dt>${T("确认", "Approved")}</dt><dd>${esc(st.verify_note)}</dd>` : ""}</dl>${st.photo_path ? `<div class="svb-ph" data-p="${esc(st.photo_path)}"></div>` : ""}<p class="svb-no">No.${String(i + 1).padStart(2, "0")} / ${String(list.length).padStart(2, "0")}</p></div>`;
     const ph = ov.querySelector("[data-p]"); if (ph) api.photoUrl(ph.dataset.p).then(u => { if (u && ph.isConnected) ph.style.backgroundImage = `url("${u}")`; });
     ov.querySelector("#svWhen").textContent = T(`收集于 ${st.date.replace(/-/g, ".")}`, `Collected on ${st.date}`);
@@ -217,7 +245,6 @@ export function openStampViewer(list, i = 0) {
   card.addEventListener("pointerleave", () => { if (x0 == null) { rx = 0; ry = 0; setT(); } });
   const flip = () => { flipped = !flipped; mus.pop(); sfx.flip(); setT(); };
   const orient = e => { if (x0 != null || e.gamma == null) return; ry = Math.max(-25, Math.min(25, e.gamma / 2)); rx = Math.max(-18, Math.min(18, (e.beta - 40) / 3)); setT(); };
-  window.addEventListener("deviceorientation", orient);
   ov.querySelector(".sc-x").onclick = () => { window.removeEventListener("deviceorientation", orient); ov.classList.remove("on"); setTimeout(() => ov.remove(), 350); };
   ov.querySelector("[data-a=flip]").onclick = flip; ov.querySelector("[data-a=next]").onclick = () => go(1);
   ov.querySelector("[data-a=share]").onclick = async () => { const st = list[i]; if (!st || !st.photo_path) return toast("这枚章没有照片"); try { const u = await api.photoUrl(st.photo_path); const blob = await (await fetch(u)).blob(); const path = api.mode === "local" ? u : await api.uploadShared(blob); await api.addSharedPhoto(path, st.name, st.date); mus.chime(5, .03); toast("放进大家的相册了"); } catch (e) { toast("没能分享：" + e.message); } };

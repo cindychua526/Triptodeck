@@ -35,12 +35,12 @@ import { openBookPart } from "./pages/collection.js";
 initUI();
 const TAB_OF = { fortune: "fortune", trip: "trip", play: "play", deck: "play", coin: "play", tear: "play", collect: "collect", budget: "budget" };
 let fortuneMod = null;
-function syncSound() { const on = soundOn(), t = on ? "🔊" : "🔇"; document.querySelectorAll(".snd").forEach(b => { if (b.textContent !== t) b.textContent = t; const p = String(on); if (b.getAttribute("aria-pressed") !== p) { b.setAttribute("aria-pressed", p); b.setAttribute("aria-label", on ? "音效：开" : "音效：关"); } }); }
+function syncSound() { const on = soundOn(), t = on ? "sound-on" : "sound-off"; document.querySelectorAll(".snd").forEach(b => { if (b.dataset.st !== t) { b.dataset.st = t; b.innerHTML = ic(on ? "speaker-high" : "speaker-slash"); } const p = String(on); if (b.getAttribute("aria-pressed") !== p) { b.setAttribute("aria-pressed", p); b.setAttribute("aria-label", on ? "音效：开" : "音效：关"); } }); }
 let sndT = 0; new MutationObserver(() => { clearTimeout(sndT); sndT = setTimeout(syncSound, 60); }).observe(document.body, { childList: true, subtree: true });
 onSoundChange(syncSound);
 window.tdGo = p => go(p);
 export function go(p, push = true) {
-  if (p === "fortune") setTimeout(() => renderToday(), 80);
+  if (p === "fortune" && !document.querySelector("#stage .card.revealed, #stage.front")) setTimeout(() => renderToday(), 80);
   if (!document.getElementById("pg-" + p)) p = "fortune";
   document.querySelectorAll(".page").forEach(s => s.classList.toggle("on", s.id === "pg-" + p));
   /* delegated so buttons re-rendered by a page keep working */
@@ -60,11 +60,6 @@ document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.datase
   if (p === "fortune" && fortuneMod) fortuneMod.fortuneResize();
   syncSound();
 }
-/* delegated so buttons re-rendered by a page keep working */
-document.addEventListener("click", e => {
-  const b = e.target.closest && e.target.closest("[data-back]"); if (b) { sfx.tap(); go("play"); return; }
-  const s = e.target.closest && e.target.closest(".snd"); if (s) { setSound(!soundOn()); }
-});
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => { sfx.tap(); if (sheetOpen()) closeSheet(); go(t.dataset.p); }));
 addEventListener("popstate", () => { const m = location.hash.match(/^#\/(\w+)/); go(m ? m[1] : "fortune", false); });
 addEventListener("td-go", e => go(e.detail));

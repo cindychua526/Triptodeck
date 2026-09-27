@@ -9,6 +9,7 @@ import { guideFor } from "../data/guides.js";
 import { posterStamp, stampArt } from "../data/posterstamp.js";
 import { doodle, doodleFor } from "../data/doodles.js";
 import { tripDays } from "./trip.js";
+import { applyLook } from "../lib/look.js";
 import { foodArt } from "../data/foodart.js";
 import { walletItems } from "./tickets.js";
 import { tr } from "../lib/i18n.js";
@@ -28,9 +29,11 @@ export async function makePoster(trip, stamps, extra = {}) {
   const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d"); const ft = ctx.fillText.bind(ctx); ctx.fillText = (s, a, b, m) => ft(tr(String(s)), a, b, m);
   const g0 = guideFor((trip.cities || [])[0]), accent = g0 ? g0.color : "#5a4632";
   const places = stamps.filter(s => s.kind !== "city"), seals = stamps.filter(s => s.kind === "city"), photos = stamps.filter(s => s.photo_path);
-  const pics = []; let fp = []; try { fp = (await api.foodPhotos()).filter(x => x.user_id === api.me.id); } catch (e) {}
-  const mix = []; const ph2 = photos.slice().reverse(), fp2 = fp.slice().reverse(); for (let i = 0; i < Math.max(ph2.length, fp2.length); i++) { if (ph2[i]) mix.push({ s: ph2[i], url: () => api.photoUrl(ph2[i].photo_path) }); if (fp2[i]) mix.push({ s: { name: fp2[i].food, date: fp2[i].date }, url: () => api.sharedUrl(fp2[i].photo_path) }); }
-  for (const m of mix) { if (pics.length >= 4) break; const img = await urlImg(await m.url()); if (img) pics.push({ img, s: m.s }); }
+  const pics = []; let fp = [], sp = []; try { [fp, sp] = await Promise.all([api.foodPhotos(), api.sharedPhotos()]); } catch (e) {} fp = fp.filter(x => x.user_id === api.me.id); sp = sp.filter(x => x.user_id === api.me.id);
+  const pool = [...photos.map(x => ({ s: { name: x.caption || x.name, date: x.date }, url: () => api.photoUrl(x.photo_path), t: x.created_at || x.date })), ...fp.map(x => ({ s: { name: x.caption || x.food, date: x.date }, url: () => api.sharedUrl(x.photo_path), t: x.created_at })), ...sp.map(x => ({ s: { name: x.caption || "", date: x.date }, url: () => api.sharedUrl(x.photo_path), t: x.created_at }))]
+    .sort((a, b) => String(b.t).localeCompare(String(a.t)));
+  const capped = pool.filter(m => m.s.name).concat(pool.filter(m => !m.s.name));   // photos you wrote something under come first
+  for (const m of capped) { if (pics.length >= 4) break; const img = await urlImg(await m.url()); if (img) pics.push({ img, s: m.s }); }
   let wallet = []; try { wallet = (await api.wallet()).filter(w => w.trip_id === trip.id); } catch (e) {}
   // ---- white paper collage
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
@@ -47,8 +50,8 @@ export async function makePoster(trip, stamps, extra = {}) {
   for (const w of walletItems().slice(-2)) { const art = await svgImg(foodArt(w.name)); if (art) items.push({ kind: "ticket", art, name: w.name }); }
   const dd = await svgImg(doodle(doodleFor(places[0] ? places[0].name : "", "place"), { sketch: true, accent: "#b3341e", seed: 5 })); if (dd) items.push({ kind: "sketch", img: dd });
   items.slice(0, slots.length).forEach((it, i) => { const [x, y, size] = slots[i], r = ((i * 53) % 13 - 6) * Math.PI / 180; ctx.save(); ctx.translate(x + size / 2, y + size / 2); ctx.rotate(r);
-    if (it.kind === "photo") { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 22; ctx.fillStyle = "#fff"; ctx.fillRect(-size / 2 - 22, -size / 2 - 22, size + 44, size + 110); ctx.shadowColor = "transparent"; cover(ctx, it.p.img, -size / 2, -size / 2, size, size);
-      ctx.fillStyle = "#111"; ctx.font = '400 34px "Long Cang", "Noto Serif SC", cursive'; ctx.fillText(fit(ctx, it.p.s.name, size - 20), -size / 2 + 6, size / 2 + 60); }
+    if (it.kind === "photo") { ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 22; ctx.fillStyle = "#fff"; ctx.fillRect(-size / 2 - 22, -size / 2 - 22, size + 44, size + 110); ctx.shadowColor = "transparent"; { const oc = document.createElement("canvas"); oc.width = oc.height = size; const ox = oc.getContext("2d"); cover(ox, it.p.img, 0, 0, size, size); applyLook(ox, 0, 0, size, size); ctx.drawImage(oc, -size / 2, -size / 2); }
+      ctx.fillStyle = "#111"; ctx.font = '400 38px "Long Cang", "Noto Serif SC", cursive'; ctx.textAlign = "center"; ctx.fillText(fit(ctx, it.p.s.name || "", size - 20), 0, size / 2 + 62); ctx.textAlign = "left"; }
     else if (it.kind === "stamp") { const w = size * .62, h = w * 1.25; ctx.shadowColor = "rgba(0,0,0,.2)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 16; ctx.drawImage(it.img, -w / 2, -h / 2, w, h); ctx.shadowColor = "transparent"; if (it.art) ctx.drawImage(it.art, -w / 2 + w * .32, -h / 2 + h * .296, w * .58, w * .58); }
     else if (it.kind === "ticket") { const w = size * .72, h = w * .78; ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 12; ctx.fillStyle = "#fbf8f1"; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.shadowColor = "transparent"; ctx.strokeStyle = "#2f3a2e"; ctx.lineWidth = 3; ctx.strokeRect(-w / 2, -h / 2, w, h); ctx.drawImage(it.art, -w * .3, -h / 2 + 14, w * .6, w * .6); ctx.fillStyle = "#2f3a2e"; ctx.font = '500 30px "Noto Serif SC", serif'; ctx.textAlign = "center"; ctx.fillText(fit(ctx, it.name, w - 30), 0, h / 2 - 22); ctx.textAlign = "left"; }
     else { ctx.drawImage(it.img, -size / 2, -size / 2, size, size); }
