@@ -28,7 +28,9 @@ export async function makePoster(trip, stamps, extra = {}) {
   const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d"); const ft = ctx.fillText.bind(ctx); ctx.fillText = (s, a, b, m) => ft(tr(String(s)), a, b, m);
   const g0 = guideFor((trip.cities || [])[0]), accent = g0 ? g0.color : "#5a4632";
   const places = stamps.filter(s => s.kind !== "city"), seals = stamps.filter(s => s.kind === "city"), photos = stamps.filter(s => s.photo_path);
-  const pics = []; for (const s of photos.slice().reverse()) { if (pics.length >= 4) break; const img = await urlImg(await api.photoUrl(s.photo_path)); if (img) pics.push({ img, s }); }
+  const pics = []; let fp = []; try { fp = (await api.foodPhotos()).filter(x => x.user_id === api.me.id); } catch (e) {}
+  const mix = []; const ph2 = photos.slice().reverse(), fp2 = fp.slice().reverse(); for (let i = 0; i < Math.max(ph2.length, fp2.length); i++) { if (ph2[i]) mix.push({ s: ph2[i], url: () => api.photoUrl(ph2[i].photo_path) }); if (fp2[i]) mix.push({ s: { name: fp2[i].food, date: fp2[i].date }, url: () => api.sharedUrl(fp2[i].photo_path) }); }
+  for (const m of mix) { if (pics.length >= 4) break; const img = await urlImg(await m.url()); if (img) pics.push({ img, s: m.s }); }
   let wallet = []; try { wallet = (await api.wallet()).filter(w => w.trip_id === trip.id); } catch (e) {}
   // ---- white paper collage
   ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
@@ -51,7 +53,7 @@ export async function makePoster(trip, stamps, extra = {}) {
     else if (it.kind === "ticket") { const w = size * .72, h = w * .78; ctx.shadowColor = "rgba(0,0,0,.18)"; ctx.shadowBlur = 24; ctx.shadowOffsetY = 12; ctx.fillStyle = "#fbf8f1"; ctx.fillRect(-w / 2, -h / 2, w, h); ctx.shadowColor = "transparent"; ctx.strokeStyle = "#2f3a2e"; ctx.lineWidth = 3; ctx.strokeRect(-w / 2, -h / 2, w, h); ctx.drawImage(it.art, -w * .3, -h / 2 + 14, w * .6, w * .6); ctx.fillStyle = "#2f3a2e"; ctx.font = '500 30px "Noto Serif SC", serif'; ctx.textAlign = "center"; ctx.fillText(fit(ctx, it.name, w - 30), 0, h / 2 - 22); ctx.textAlign = "left"; }
     else { ctx.drawImage(it.img, -size / 2, -size / 2, size, size); }
     ctx.restore(); });
-  if (!pics.length) { ctx.fillStyle = "#b0b0b5"; ctx.font = '400 34px "Noto Serif SC", serif'; ctx.fillText("打卡拍的照片会贴在这里", 110, 1100); }
+  if (!pics.length) { ctx.fillStyle = "#b0b0b5"; ctx.font = '400 34px "Noto Serif SC", serif'; ctx.fillText("打卡和美食票拍的照片会贴在这里", 110, 1100); }
   const RY = 2330; ctx.strokeStyle = "#111"; ctx.setLineDash([12, 12]); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(100, RY); ctx.lineTo(W - 100, RY); ctx.stroke(); ctx.setLineDash([]);
   const liked = wallet.filter(w => w.rating === "love").length;
   ctx.fillStyle = "#111"; ctx.font = '400 30px "Special Elite", monospace'; ctx.letterSpacing = "3px";

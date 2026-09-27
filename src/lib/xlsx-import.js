@@ -2,7 +2,7 @@
 import * as XLSX from "xlsx";
 import { GUIDES } from "../data/guides.js";
 const KIND = { "景点": "sight", "美食": "food", "交通": "transit", "住宿": "lodging", "航班": "flight", "其他": "sight", "体验": "sight" };
-const CAT = { "住宿": "Lodging", "机票": "Flight", "门票": "Tickets", "交通": "Transport", "保险": "Other", "其他": "Other", "餐饮": "Food" };
+const CAT = { "住宿": "Lodging", "酒店": "Lodging", "机票": "Flight", "航班": "Flight", "门票": "Activities", "景点": "Activities", "交通": "Transport", "餐饮": "Food", "美食": "Food", "咖啡": "Coffee", "咖啡茶饮": "Coffee", "特色体验": "Experience", "体验": "Experience", "购物": "Shopping", "保险": "Other", "其他": "Other" };
 const cityId = n => { n = String(n || "").trim(); const g = GUIDES.find(g => g.id === n || g.name === n || (g.en && g.en.toLowerCase() === n.toLowerCase())); return g ? g.id : null; };
 const cityName = n => { const id = cityId(n); const g = id && GUIDES.find(g => g.id === id); return g ? g.name : String(n || "").trim(); };
 const dateStr = v => { if (v instanceof Date) return v.toISOString().slice(0, 10); const s = String(v || "").trim().replace(/[./]/g, "-"); const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : ""; };

@@ -13,7 +13,8 @@ import { getJournal, journalText } from "../lib/journal.js";
 import { tr } from "../lib/i18n.js";
 
 const RATE = { love: "♥", ok: "○", meh: "✕" };
-const rm = n => "RM " + Math.round(n).toLocaleString("en-MY");
+import { fmt } from "../lib/money.js";
+const rm = n => fmt(n, api.membership);
 async function lines() {
   const t = api.trip, ss = myStamps().filter(s => s.trip_id === t.id);
   let wallet = [], logs = [], j = null; try { [wallet, logs, j] = await Promise.all([api.wallet(), api.log(), api.journal()]); } catch (e) {}

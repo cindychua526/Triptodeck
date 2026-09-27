@@ -218,7 +218,7 @@ nav.tabs{ flex:none; height:60px; display:flex; border-top:1px solid var(--line)
 }
 .tk-main{ position:absolute; left:0; top:0; bottom:0; width:74%; padding:.9em 1em .8em 1.15em; }
 .tk-top{ display:flex; justify-content:space-between; font-family:"Cormorant Garamond",serif; font-style:italic; font-size:.82em; letter-spacing:.06em; opacity:.85; }
-.tk-name{ font-weight:700; font-size:1.95em; line-height:1.15; margin-top:.35em; letter-spacing:.04em; text-shadow:0 1px 0 rgba(0,0,0,.12); white-space:nowrap; position:relative; z-index:1; }
+.tk-name{ font-weight:700; font-size:1.95em; line-height:1.1; margin-top:.35em; letter-spacing:.02em; text-shadow:0 1px 0 rgba(0,0,0,.12); white-space:normal; overflow-wrap:anywhere; max-width:62%; position:relative; z-index:1; } .tk-name.long{ font-size:1.35em; } .tk-name.xlong{ font-size:1.05em; }
 .tk-en{ font-family:"Cormorant Garamond",serif; font-style:italic; font-size:.9em; opacity:.8; margin-top:.1em; position:relative; z-index:1; }
 .tk-mean{ margin:.55em 0 0; font-size:.86em; line-height:1.5; max-width:66%; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; position:relative; z-index:1; }
 .tk-foot{ position:absolute; left:1.15em; right:1em; bottom:.8em; display:flex; align-items:center; gap:.6em; font-family:"Cormorant Garamond",serif; font-style:italic; font-size:.85em; }

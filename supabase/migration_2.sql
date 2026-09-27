@@ -92,3 +92,6 @@ do $$ begin
   alter publication supabase_realtime add table moments; exception when others then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table letters; exception when others then null; end $$;
+
+do $$ begin
+  alter publication supabase_realtime add table skill_draws; exception when others then null; end $$;

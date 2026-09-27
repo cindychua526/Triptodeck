@@ -62,7 +62,7 @@ function render() {
   if (mFx.length) h += `<div class="sk-sec-h">TOMORROW <b>明天</b></div>` + mFx.map(e => fxHTML(e, true)).join("");
   h += `<div class="sk-sec-h">THE TABLE <b>今天的牌桌</b></div><div class="seats">${api.members.map(m => { const r = table.find(t => t.user_id === m.id);
       const inner = !r ? `<div class="seat-empty">还没抽</div>` : r.card ? cardHTML(r.card, { cls: "mini", state: r.status === "activated" ? "done" : "" }) : `<div class="tc mini down"><div class="tc-in"><div class="tc-face tc-back">${CARD_BACK}</div></div></div>`;
-      return `<div class="seat">${inner}<b>${esc(m.name)}${m.id === api.me.id ? "（你）" : ""}</b><small>${!r ? "" : r.status === "activated" ? "✓ 已发动" : r.card ? "未发动" : "已抽 · 未揭晓"}</small></div>`; }).join("")}</div>`;
+      return `<div class="seat"${r && r.card ? ` data-show="${r.card}" data-who="${esc(m.name)}" data-txt="${esc((r.activation && r.activation.text) || "")}"` : ""}>${inner}<b>${esc(m.name)}${m.id === api.me.id ? "（你）" : ""}</b><small>${!r ? "" : r.status === "activated" ? "✓ 已发动" : r.card ? "未发动" : "已抽 · 未揭晓"}</small></div>`; }).join("")}</div>`;
   h += `<div class="sk-sec-h">SKILL LOG <b>技能日志</b></div><div class="log">${logs.length ? logs.slice(0, 40).map(l => `<div class="log-row"><time>${hm(l.created_at)}</time><div><b>${l.card && CARD[l.card] ? `${l.card} · ${CARD[l.card].name}` : "牌堆"}</b>　${({ DRAWN: "抽了一张牌", ACTIVATED: "发动", EFFECT: "⚠ 执行失控" })[l.action] || esc(l.action)}<br><span>${esc(nameOf(l.user_id))}</span>${l.effect && l.action !== "DRAWN" ? `<p>${esc(l.effect)}</p>` : ""}<small>${l.date !== today() ? shortDate(l.date) : ""}</small></div></div>`).join("") : `<div class="log-empty">还没有人抽牌。第一张会是谁？</div>`}</div>`;
   root.innerHTML = h; wire(root);
 }
@@ -78,6 +78,10 @@ function fxHTML(e, future) {
 }
 function wire(root) {
   const o = $("oracle"); if (o) holdToDraw(o);
+  root.querySelectorAll(".seat[data-show]").forEach(sd => sd.onclick = () => { const k = sd.dataset.show, c = CARD[k]; if (!c) return; sfx.flip();
+    openSheet(`<div class="as show-card"><small class="as-k">${esc(sd.dataset.who)} · ${sd.dataset.txt ? "已发动" : "还没发动"}</small><div class="show-big">${cardHTML(k, { cls: "hero" })}</div><h3>${k} · ${c.name}</h3><p class="show-myth">${c.myth}</p><p>${c.effect}</p>${sd.dataset.txt ? `<p class="show-txt">${esc(sd.dataset.txt)}</p>` : ""}<p class="as-hint">失控：${c.ooc}</p><div class="as-btns"><button class="btn full" data-act="close">好</button></div></div>`);
+    bind(document.querySelector(".usheet"), { close: () => closeSheet() }); });
+  import("../lib/atmos.js").then(async A => { const a = await A.todaysAtmos(); const top = root.querySelector(".tp-top, .ph"); if (a && top && !root.querySelector(".atm-card")) top.insertAdjacentHTML("afterend", `<div class="atm-card"><small>今日氛围牌 · 自动出现，人人都有</small><b>${A.ATMOS[a].name}</b><span>${A.ATMOS[a].hint}</span></div>`); });
   const mc = $("myCard"); if (mc) { const c = mc.querySelector(".tc"); mc.onclick = () => { c.classList.remove("poke"); void c.offsetWidth; c.classList.add("poke"); sfx.tap(); buzz(6); }; tilt(mc, c); }
   root.querySelectorAll("[data-fx]").forEach(b => b.onclick = () => handleFx(effects.find(e => e.id === b.dataset.fx), b.dataset.fk));
   bind(root, { activate: () => startActivate(mine.card) });
@@ -206,7 +210,7 @@ function startActivate(k, opt = {}) {
     "10"() {
       const ms = api.members;
       if (ms.length < 1) return paint(`${sheetHead("10")}${intro}${emptyBox("还没有旅伴。")}</div>`);
-      paint(`${sheetHead("10")}${intro}<div class="skd-sec"><small>MAIN CHARACTER AURA</small><p>谁来拥有主角光环？</p></div>${optList(ms.map(m => ({ id: m.id, label: m.name })), v.pick)}${row("就是TA了", !v.pick)}</div>`, { apply: () => { const n = nameOf(v.pick); const until = Date.now() + 30 * 60000; done({ member: v.pick, until, text: `${n} 接下来 30 分钟负责带大家逛` }, `${n} is leading the group`, `<p style="text-align:center">主角光环 ✦ <b>${esc(n)}</b><br>接下来 30 分钟负责带大家逛</p>`); } });
+      paint(`${sheetHead("10")}${intro}<div class="skd-sec"><small>MAIN CHARACTER AURA</small><p>谁来拥有主角光环？</p></div>${optList(ms.map(m => ({ id: m.id, label: m.name })), v.pick)}${row("就是TA了", !v.pick)}</div>`, { apply: () => { const n = nameOf(v.pick); const until = Date.now() + 30 * 60000; done({ member: v.pick, until, text: `${n} 接下来 30 分钟负责带大家逛` }, `${n} 带大家逛 30 分钟`, `<p style="text-align:center">主角光环 ✦ <b>${esc(n)}</b><br>接下来 30 分钟负责带大家逛</p>`); } });
     },
     "9"() {
       const st = dayActs(T()).filter(x => x.status !== "removed" && x.status !== "skipped" && !["transit"].includes(x.kind)), d = new Date(), nm = d.getHours() * 60 + d.getMinutes();

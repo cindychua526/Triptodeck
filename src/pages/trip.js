@@ -102,7 +102,7 @@ export function render() {
     h += `<p class="col-note">清单是大家共用的，谁打了勾所有人都能看到。</p>`;
     cats.forEach(cat => {
       const items = checks.filter(c => c.category === cat);
-      h += `<div class="ck-cat"><h3>${esc(cat)} <small>${items.filter(i => i.done).length}/${items.length}</small></h3><ul>${items.map(i => `<li class="${i.done ? "done" : ""}"><button class="ck-box" data-ck="${i.id}" role="checkbox" aria-checked="${i.done}" aria-label="${esc(i.label)}"></button><span><b>${esc(i.label)}</b>${i.done ? `<small>✓ ${esc(nameOf(i.done_by))} · ${whenTxt(i.done_at)}</small>` : ""}</span><button class="x" data-ckdel="${i.id}" aria-label="删除">×</button></li>`).join("")}</ul>
+      h += `<div class="ck-cat"><h3>${esc(cat)} <small>${items.filter(i => i.done).length}/${items.length}</small></h3><ul>${items.map(i => `<li class="${i.done ? "done" : ""}"><button class="ck-box" data-ck="${i.id}" role="checkbox" aria-checked="${i.done}" aria-label="${esc(i.label)}"></button><span><b data-ckren="${i.id}" data-l="${esc(i.label)}">${esc(i.label)}</b>${i.done ? `<small>✓ ${esc(nameOf(i.done_by))} · ${whenTxt(i.done_at)}</small>` : ""}</span><button class="x" data-ckdel="${i.id}" aria-label="删除">×</button></li>`).join("")}</ul>
         <div class="addrow"><input class="inp" data-newin="${esc(cat)}" placeholder="加一项到「${esc(cat)}」" maxlength="40"><button class="btn" data-newck="${esc(cat)}">添加</button></div></div>`;
     });
     h += `<div class="ck-cat"><div class="addrow"><input class="inp" id="newCat" placeholder="新的分类，比如：伴手礼" maxlength="16"><button class="btn" data-act="newcat">新分类</button></div></div>`;
@@ -126,6 +126,7 @@ export function render() {
   root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openActivity(b.dataset.open));
   root.querySelectorAll("[data-spot]").forEach(b => b.onclick = () => { const a = acts.find(x => x.id === b.dataset.aid); openCheckin({ name: b.dataset.spot, city: a.city, date: a.date, kind: "place", parent: a.title }); });
   root.querySelectorAll("[data-ck]").forEach(b => b.onclick = async () => { const it = checks.find(c => c.id === b.dataset.ck); it.done = !it.done; it.done_by = api.me.id; it.done_at = new Date().toISOString(); sfx[it.done ? "stamp" : "tap"](); render(); try { await api.setCheck(it.id, it.done); } catch (e) { toast("没能同步，请检查网络"); } });
+  root.querySelectorAll("[data-ckren]").forEach(b => b.onclick = async () => { const n = prompt("改成", b.dataset.l); if (!n || n.trim() === b.dataset.l) return; try { await api.renameCheck(b.dataset.ckren, n.trim()); } catch (e) { toast("没能改"); } });
   root.querySelectorAll("[data-ckdel]").forEach(b => b.onclick = async () => { if (!confirm("删除这一项？")) return; try { await api.deleteCheck(b.dataset.ckdel); } catch (e) { toast("没能删除"); } });
   root.querySelectorAll("[data-newck]").forEach(b => b.onclick = async () => { const inp = root.querySelector(`[data-newin="${CSS.escape(b.dataset.newck)}"]`), v = inp.value.trim(); if (!v) return; try { await api.addCheck(b.dataset.newck, v, 9999); sfx.tap(); } catch (e) { toast("没能添加"); } });
   bind(root, {

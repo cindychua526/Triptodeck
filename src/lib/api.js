@@ -9,7 +9,7 @@ const URL_ = import.meta.env.VITE_SUPABASE_URL, KEY_ = import.meta.env.VITE_SUPA
 const listeners = {};
 const emit = t => (listeners[t] || []).forEach(f => { try { f(); } catch (e) { console.error(e); } });
 export function on(table, f) { (listeners[table] = listeners[table] || []).push(f); return () => { listeners[table] = listeners[table].filter(x => x !== f); }; }
-const TRIP_EVENTS = ["trip", "checkins", "food_photos", "day_lines", "moments", "letters", "activities", "checklist_items", "decisions", "skill_log", "skill_effects", "trip_members", "custom_items", "expenses", "budget"];
+const TRIP_EVENTS = ["trip", "checkins", "food_photos", "shared_photos", "wallet", "day_lines", "moments", "letters", "activities", "checklist_items", "decisions", "skill_log", "skill_effects", "trip_members", "custom_items", "expenses", "budget"];
 const emitAll = () => TRIP_EVENTS.forEach(emit);
 
 const GENERIC_CHECKLIST = [
@@ -41,8 +41,8 @@ function cloud() {
   function subscribe() {
     if (channel) sb.removeChannel(channel);
     channel = sb.channel("trip-" + trip.id);
-    ["activities", "checklist_items", "decisions", "skill_log", "skill_effects", "trip_members", "custom_items", "expenses", "departures", "checkins", "food_photos", "day_lines", "moments", "letters"].forEach(t =>
-      channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: `trip_id=eq.${trip.id}` }, async () => { if (t === "trip_members") await loadMembers(); emit(t); }));
+    ["activities", "checklist_items", "decisions", "skill_log", "skill_effects", "skill_draws", "trip_members", "custom_items", "expenses", "departures", "checkins", "food_photos", "day_lines", "moments", "letters", "wallet_items", "shared_photos"].forEach(t =>
+      channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: `trip_id=eq.${trip.id}` }, async () => { if (t === "trip_members") await loadMembers(); emit(t === "wallet_items" ? "wallet" : t); }));
     channel.subscribe();
   }
   async function refreshTrips() { const rows = need(await sb.from("trip_members").select("trip_id, trips(*)").eq("user_id", me.id)); trips = rows.map(r => r.trips).filter(Boolean).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date))); return trips; }
@@ -50,7 +50,7 @@ function cloud() {
   return {
     mode: "cloud",
     get me() { return me; }, get trip() { return trip; }, get members() { return members; }, get trips() { return trips; },
-    get membership() { return trip ? { total_budget: +(trip.total_budget ?? (membership && membership.total_budget) ?? 3000), budget_mode: trip.budget_mode || "strict", currency: "MYR", cny_rate: +(trip.cny_rate ?? 0.6) } : null; },
+    get membership() { return trip ? { total_budget: +(trip.total_budget ?? (membership && membership.total_budget) ?? 3000), budget_mode: trip.budget_mode || "strict", currency: (membership && membership.currency) || localStorage.getItem("td-home-cur") || "MYR", cny_rate: +(trip.cny_rate ?? 0.6) } : null; },
     async init() {
       const { data: { session } } = await sb.auth.getSession(); if (!session) return null;
       const p = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
@@ -67,6 +67,17 @@ function cloud() {
       me = { id: session.user.id, name }; await refreshTrips(); return me;
     },
     async rename(name) { need(await sb.from("profiles").update({ display_name: name }).eq("id", me.id)); me.name = name; if (trip) await loadMembers(); emit("trip_members"); },
+    /* email login: a 6-digit code by email. Linking from an anonymous session keeps a recovery code first, then merges after the switch. */
+    async myEmail() { const { data: { user } } = await sb.auth.getUser(); return user && user.email && !user.is_anonymous ? user.email : null; },
+    async emailStart(email) { const r = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } }); if (r.error) throw new Error(r.error.message); },
+    async emailVerify(email, token, mergeCode) {
+      const r = await sb.auth.verifyOtp({ email, token, type: "email" }); if (r.error) throw new Error(/expired|invalid/i.test(r.error.message) ? "CODE_WRONG" : r.error.message);
+      const u = r.data.user; if (mergeCode) { try { await sb.rpc("reclaim_identity", { p_code: mergeCode }); } catch (e) {} }
+      const { data: prof } = await sb.from("profiles").select("display_name").eq("id", u.id).maybeSingle();
+      if (!prof) need(await sb.from("profiles").upsert({ id: u.id, display_name: (me && me.name) || "旅伴" }));
+      me = { id: u.id, name: prof ? prof.display_name : ((me && me.name) || "旅伴") }; await refreshTrips(); return me;
+    },
+    async signOut() { await sb.auth.signOut(); try { localStorage.removeItem("td-trip"); } catch (e) {} },
     listTrips: refreshTrips,
     async createTrip(o) {
       const t = need(await sb.rpc("create_trip", { p_name: o.name, p_start: o.start, p_end: o.end, p_budget: o.budget || 3000, p_kind: o.kind || "group", p_cities: o.cities || [], p_template: o.template || null }));
@@ -78,6 +89,8 @@ function cloud() {
     async joinTrip(code) { const t = need(await sb.rpc("join_trip", { p_code: code })); await refreshTrips(); await useTrip(t); return t; },
     async switchTrip(id) { const t = trips.find(x => x.id === id); if (t) await useTrip(t); },
     async updateTrip(patch) { need(await sb.from("trips").update(patch).eq("id", trip.id)); Object.assign(trip, patch); await refreshTrips(); emit("trip"); },
+    async deleteTrip(id) { need(await sb.from("trips").delete().eq("id", id)); await refreshTrips(); if (trip && trip.id === id) { trip = null; if (trips[0]) await useTrip(trips[0]); else emitAll(); } },
+    async leaveTripById(id) { need(await sb.from("trip_members").delete().eq("trip_id", id).eq("user_id", me.id)); await refreshTrips(); if (trip && trip.id === id) { trip = null; if (trips[0]) await useTrip(trips[0]); else emitAll(); } },
     async leaveTrip() { need(await sb.from("trip_members").delete().eq("trip_id", trip.id).eq("user_id", me.id)); await refreshTrips(); trip = null; if (trips[0]) await useTrip(trips[0]); else emitAll(); },
     async signOut() { if (channel) sb.removeChannel(channel); await sb.auth.signOut(); try { localStorage.removeItem("td-trip"); } catch (e) {} },
     async activities() { return need(await sb.from("activities").select("*").eq("trip_id", trip.id).order("date").order("time")); },
@@ -88,22 +101,28 @@ function cloud() {
     async addCheck(category, label, sort) { need(await sb.from("checklist_items").insert({ trip_id: trip.id, category, label, sort })); emit("checklist_items"); },
     async setCheck(id, done) { need(await sb.from("checklist_items").update({ done, done_by: done ? me.id : null, done_at: done ? new Date().toISOString() : null }).eq("id", id)); emit("checklist_items"); },
     async deleteCheck(id) { need(await sb.from("checklist_items").delete().eq("id", id)); emit("checklist_items"); },
+    async renameCheck(id, label) { need(await sb.from("checklist_items").update({ label }).eq("id", id)); emit("checklist_items"); },
     async customItems() { return need(await sb.from("custom_items").select("*").eq("trip_id", trip.id).order("created_at")); },
     async addCustom(it) { need(await sb.from("custom_items").insert({ ...it, trip_id: trip.id })); emit("custom_items"); },
     async deleteCustom(id) { need(await sb.from("custom_items").delete().eq("id", id)); emit("custom_items"); },
+    async updateCustom(id, patch) { need(await sb.from("custom_items").update(patch).eq("id", id)); emit("custom_items"); },
+    async deleteDecision(id) { need(await sb.from("decisions").delete().eq("id", id).eq("user_id", me.id)); emit("decisions"); },
     async expenses() { return need(await sb.from("expenses").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false })); },
     async addExpense(e) { need(await sb.from("expenses").insert({ ...e, trip_id: trip.id })); emit("expenses"); },
     async deleteExpense(id) { need(await sb.from("expenses").delete().eq("id", id)); emit("expenses"); },
     async updateExpense(id, patch) { need(await sb.from("expenses").update(patch).eq("id", id)); emit("expenses"); },
-    async updateBudget(patch) { need(await sb.from("trips").update(patch).eq("id", trip.id)); Object.assign(trip, patch); emit("budget"); },
+    async updateBudget(patch) { const { currency, ...rest } = patch;
+      if (currency) { localStorage.setItem("td-home-cur", currency); need(await sb.from("trip_members").update({ currency }).eq("trip_id", trip.id).eq("user_id", me.id)); if (membership) membership.currency = currency; }
+      if (Object.keys(rest).length) { need(await sb.from("trips").update(rest).eq("id", trip.id)); Object.assign(trip, rest); } emit("budget"); emit("expenses"); },
     async departures() { return need(await sb.from("departures").select("*").eq("trip_id", trip.id)); },
     async setDeparture(d) { need(await sb.from("departures").upsert({ ...d, trip_id: trip.id, user_id: me.id })); emit("departures"); },
     async uploadShared(blob) { const path = `${trip.id}/${me.id}/${Date.now()}.jpg`; need(await sb.storage.from("trip-photos").upload(path, blob, { contentType: "image/jpeg" })); return path; },
     async sharedUrl(path) { if (!path) return null; if (path.startsWith("data:")) return path; const r = await sb.storage.from("trip-photos").createSignedUrl(path, 3600); return r.data && r.data.signedUrl; },
-    async wallet() { return need(await sb.from("wallet_items").select("*").order("created_at")); },
+    async wallet() { return need(await sb.from("wallet_items").select("*").eq("user_id", me.id).order("created_at")); },
     async putWallet(w) { need(await sb.from("wallet_items").upsert({ ...w, trip_id: w.trip_id || (trip && trip.id) })); emit("wallet"); },
     async removeWallet(id) { need(await sb.from("wallet_items").delete().eq("spot_id", id)); emit("wallet"); },
     async stamps() { return need(await sb.from("stamps").select("*").order("created_at")); },
+    async deleteStamp(id) { need(await sb.from("stamps").delete().eq("id", id).eq("user_id", me.id)); emit("stamps"); },
     async addStamp(s) { const r = need(await sb.from("stamps").insert({ ...s, trip_id: trip && trip.id }).select().single()); emit("stamps"); return r; },
     async uploadPhoto(blob) { const path = `${me.id}/${Date.now()}.jpg`; need(await sb.storage.from("checkins").upload(path, blob, { contentType: "image/jpeg" })); return path; },
     async photoUrl(path) { if (!path) return null; if (path.startsWith("data:")) return path; if (path.startsWith("trip:")) return this.sharedUrl(path.slice(5)); const r = await sb.storage.from("checkins").createSignedUrl(path, 3600); return r.data && r.data.signedUrl; },
@@ -112,6 +131,15 @@ function cloud() {
     async submitCheckin(c) { const r = need(await sb.from("checkins").insert({ ...c, trip_id: trip.id }).select().single()); emit("checkins"); if (trip.kind === "solo" || members.length < 2) { await this.reviewCheckin(r.id, true); r.status = "approved"; } return r; },
     async reviewCheckin(id, ok, note) { const r = need(await sb.rpc("review_checkin", { p_id: id, p_ok: ok, p_note: note || null })); emit("checkins"); emit("stamps"); return r; },
     async guaranteeCheckin(id) { const r = need(await sb.rpc("guarantee_checkin", { p_id: id })); emit("checkins"); emit("stamps"); return r; },
+    async recoveryCode() { return need(await sb.rpc("ensure_recovery_code")); },
+    async refresh() { try { await refreshTrips(); if (trip) { const t = trips.find(x => x.id === trip.id); if (t) trip = t; await loadMembers(); subscribe(); } } catch (e) {} emitAll(); },
+    async buddyWallet() { return trip ? need(await sb.from("wallet_items").select("*").eq("trip_id", trip.id).neq("user_id", me.id)) : []; },
+    async sharedPhotos() { return trip ? need(await sb.from("shared_photos").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false })) : []; },
+    async addSharedPhoto(photo_path, caption, date) { need(await sb.from("shared_photos").insert({ trip_id: trip.id, photo_path, caption: caption || null, date: date || undefined })); emit("shared_photos"); },
+    async removeSharedPhoto(id) { need(await sb.from("shared_photos").delete().eq("id", id)); emit("shared_photos"); },
+    async savePushSub(sub) { need(await sb.from("push_subs").upsert({ ...sub, user_id: me.id, trip_id: trip ? trip.id : null }, { onConflict: "endpoint" })); },
+    async reclaim(code) { const n = need(await sb.rpc("reclaim_identity", { p_code: code })); await refreshTrips(); return n; },
+    async removeMember(uid) { need(await sb.rpc("remove_member", { t: trip.id, u: uid })); await loadMembers(); emit("trip_members"); },
     async dayLines(date) { return need(await sb.from("day_lines").select("*").eq("trip_id", trip.id).eq("date", date)); },
     async saveDayLine(date, text, mood) { need(await sb.from("day_lines").upsert({ trip_id: trip.id, user_id: me.id, date, text, mood }, { onConflict: "trip_id,user_id,date" })); emit("day_lines"); },
     async moments(date) { return need(await sb.from("day_lines").select("*").eq("trip_id", trip.id).eq("date", date)); },
@@ -166,7 +194,7 @@ function local() {
     mode: "local",
     get me() { return db && db.me; }, get trip() { return cur(); }, get trips() { return db ? db.trips || [] : []; },
     get members() { if (!db || !db.me) return []; const t = cur(); return [{ id: db.me.id, name: db.me.name }, ...(t && t.kind !== "solo" ? (db.companionsBy[db.cur] || []) : []).map(n => ({ id: "c:" + n, name: n, local: true }))]; },
-    get membership() { const t = cur(); if (!t) return null; const m = (db.memberships || {})[db.cur] || {}; return { total_budget: +(t.total_budget ?? m.total_budget ?? 3000), budget_mode: t.budget_mode || m.budget_mode || "strict", currency: "MYR", cny_rate: +(t.cny_rate ?? m.cny_rate ?? .6) }; },
+    get membership() { const t = cur(); if (!t) return null; const m = (db.memberships || {})[db.cur] || {}; return { total_budget: +(t.total_budget ?? m.total_budget ?? 3000), budget_mode: t.budget_mode || m.budget_mode || "strict", currency: localStorage.getItem("td-home-cur") || "MYR", cny_rate: +(t.cny_rate ?? m.cny_rate ?? .6) }; },
     async init() { return db && db.me && cur() ? { me: db.me, trip: cur() } : null; },
     async signIn(name) { db = db || { trips: [], memberships: {}, companionsBy: {} }; db.me = db.me || { id: "me" }; db.me.name = name; save(); return db.me; },
     async rename(name) { db.me.name = name; save(); emit("trip_members"); },
@@ -182,6 +210,8 @@ function local() {
     async joinTrip() { throw new Error("LOCAL_MODE"); },
     async switchTrip(id) { db.cur = id; save(); emitAll(); },
     async updateTrip(patch) { Object.assign(cur(), patch); save(); emit("trip"); },
+    async deleteTrip(id) { if (db.cur !== id) { const keep = db.cur; db.cur = id; await this.leaveTrip(); db.cur = db.trips.some(t => t.id === keep) ? keep : db.cur; save(); emitAll(); } else await this.leaveTrip(); },
+    async leaveTripById(id) { return this.deleteTrip(id); },
     async leaveTrip() { const id = db.cur; db.trips = db.trips.filter(t => t.id !== id); ["activities", "checklist", "expenses", "decisions", "draws", "effects", "log", "custom"].forEach(n => db[n] = A(n).filter(r => r.trip_id !== id)); db.cur = db.trips[0] ? db.trips[0].id : null; save(); emitAll(); },
     async signOut() { localStorage.removeItem(KEY); db = null; },
     setCompanions(list) { db.companionsBy[db.cur] = list; save(); emit("trip_members"); },
@@ -191,16 +221,19 @@ function local() {
     async deleteActivity(id) { db.activities = A("activities").filter(x => x.id !== id); save(); emit("activities"); },
     async checklist() { return T("checklist").sort((a, b) => a.sort - b.sort); },
     async addCheck(category, label, sort) { A("checklist").push({ id: uid("c"), trip_id: db.cur, category, label, sort, done: false }); save(); emit("checklist_items"); },
+    async renameCheck(id, label) { A("checklist").find(x => x.id === id).label = label; save(); emit("checklist_items"); },
     async setCheck(id, done) { const r = A("checklist").find(x => x.id === id); Object.assign(r, { done, done_by: done ? db.me.id : null, done_at: done ? now() : null }); save(); emit("checklist_items"); },
     async deleteCheck(id) { db.checklist = A("checklist").filter(x => x.id !== id); save(); emit("checklist_items"); },
     async customItems() { return T("custom"); },
     async addCustom(it) { A("custom").push({ ...it, id: uid("u"), trip_id: db.cur, created_by: db.me.id, created_at: now() }); save(); emit("custom_items"); },
     async deleteCustom(id) { db.custom = A("custom").filter(x => x.id !== id); save(); emit("custom_items"); },
+    async updateCustom(id, patch) { Object.assign(A("custom").find(x => x.id === id), patch); save(); emit("custom_items"); },
+    async deleteDecision(id) { db.decisions = A("decisions").filter(x => x.id !== id); save(); emit("decisions"); },
     async expenses() { return T("expenses").sort((a, b) => b.created_at.localeCompare(a.created_at)); },
     async addExpense(e) { A("expenses").push({ user_id: db.me.id, shared: true, ...e, id: uid("e"), trip_id: db.cur, created_at: now() }); save(); emit("expenses"); },
     async updateExpense(id, patch) { Object.assign(A("expenses").find(x => x.id === id), patch); save(); emit("expenses"); },
     async deleteExpense(id) { db.expenses = A("expenses").filter(x => x.id !== id); save(); emit("expenses"); },
-    async updateBudget(patch) { Object.assign(cur(), patch); save(); emit("budget"); },
+    async updateBudget(patch) { const { currency, ...rest } = patch; if (currency) localStorage.setItem("td-home-cur", currency); Object.assign(cur(), rest); save(); emit("budget"); emit("expenses"); },
     async departures() { return T("departures"); },
     async setDeparture(d) { db.departures = A("departures").filter(x => !(x.trip_id === db.cur && x.user_id === db.me.id)).concat({ ...d, trip_id: db.cur, user_id: db.me.id, created_at: now() }); save(); emit("departures"); },
     async uploadShared(blob, dataUrl) { return dataUrl; },
@@ -209,6 +242,7 @@ function local() {
     async putWallet(w) { db.wallet = A("wallet").filter(x => x.spot_id !== w.spot_id).concat({ trip_id: db.cur, created_at: now(), ...w }); save(); emit("wallet"); },
     async removeWallet(id) { db.wallet = A("wallet").filter(x => x.spot_id !== id); save(); emit("wallet"); },
     async stamps() { return A("stamps"); },
+    async deleteStamp(id) { db.stamps = A("stamps").filter(x => x.id !== id); save(); emit("stamps"); },
     async addStamp(s) { const r = { ...s, id: uid("s"), trip_id: db.cur, created_at: now() }; A("stamps").push(r); save(); emit("stamps"); return r; },
     async uploadPhoto(blob, dataUrl) { return dataUrl; },
     async photoUrl(path) { return path && path.startsWith("trip:") ? path.slice(5) : path; },
@@ -216,6 +250,11 @@ function local() {
     async checkins() { return T("checkins").sort((a, b) => b.created_at.localeCompare(a.created_at)); },
     async submitCheckin(c) { const r = { ...c, id: uid("ck"), trip_id: db.cur, user_id: db.me.id, status: "pending", created_at: now() }; A("checkins").push(r); save(); emit("checkins"); if (cur().kind === "solo" || !(db.companionsBy[db.cur] || []).length) { await self.reviewCheckin(r.id, true, null, true); } return r; },
     async guaranteeCheckin(id) { return this.reviewCheckin(id, true, "土地公担保", true); },
+    async recoveryCode() { return "本机模式"; }, async savePushSub() {},
+    async refresh() { emitAll(); }, async buddyWallet() { return []; },
+    async sharedPhotos() { return T("shared_photos").sort((a, b) => b.created_at.localeCompare(a.created_at)); },
+    async addSharedPhoto(photo_path, caption, date) { A("shared_photos").push({ id: uid("sp"), trip_id: db.cur, user_id: db.me.id, photo_path, caption, date: date || new Date().toISOString().slice(0, 10), created_at: now() }); save(); emit("shared_photos"); },
+    async removeSharedPhoto(id) { db.shared_photos = A("shared_photos").filter(x => x.id !== id); save(); emit("shared_photos"); }, async myEmail() { return null; }, async emailStart() { throw new Error("单机模式没有邮箱登录"); }, async emailVerify() { throw new Error("单机模式没有邮箱登录"); }, async signOut() {}, async reclaim() { throw new Error("单机模式没有房间"); }, async removeMember() {},
     async dayLines(date) { return T("day_lines").filter(x => x.date === date); },
     async saveDayLine(date, text, mood) { const L = A("day_lines"); const i = L.findIndex(x => x.trip_id === db.cur && x.user_id === db.me.id && x.date === date); const row = { trip_id: db.cur, user_id: db.me.id, date, text, mood, id: i >= 0 ? L[i].id : uid("dl") }; if (i >= 0) L[i] = row; else L.push(row); save(); emit("day_lines"); },
     async addMoment(date, note, lat, lng) { A("moments").push({ id: uid("mo"), trip_id: db.cur, user_id: db.me.id, date, note, lat, lng, created_at: now() }); save(); emit("moments"); },

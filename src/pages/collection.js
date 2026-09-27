@@ -50,16 +50,17 @@ export function renderBook() {
   const t = api.trip, ended = today() >= t.end_date, last = photos[photos.length - 1];
   const pouch = localStorage.getItem("td-pouch") || "gold";
   const g = guideFor((t.cities || [])[0]), stampsFan = places.slice(-3), inks = [...seals.slice(-1), ...places.slice(-2)];
-  root.innerHTML = `<div class="bk2-top"><button class="trip-sw" data-act="lib"><small>MY TRAVEL BOOK · ${T("只有你看得到", "only you can see")} ⇄</small><h2>${esc(t.name)}</h2><span>${g ? esc(g.en) : ""} · ${(t.start_date || "").slice(5).replace("-", ".")} – ${(t.end_date || "").slice(5).replace("-", ".")}</span></button><button class="icon-btn" data-act="poster" aria-label="生成海报">${T("海报", "Poster")}</button></div>
+  root.innerHTML = `<div class="bk2-top"><button class="trip-sw" data-act="lib"><small>MY TRAVEL BOOK · ${T("只有你看得到", "only you can see")} ⇄</small><h2>${esc(t.name)}</h2><span>${g ? esc(g.en) : ""} · ${(t.start_date || "").slice(5).replace("-", ".")} – ${(t.end_date || "").slice(5).replace("-", ".")}</span></button><div class="bk2-acts"><button class="icon-btn" data-open="receipt">${T("发票", "Receipt")}</button><button class="icon-btn" data-act="poster" aria-label="生成海报">${T("海报", "Poster")}</button></div></div>
     <div class="bk2">
       <button class="bk2-t" data-open="album"><span class="bk2-pv al" ${last ? `data-bg="${esc(last.photo_path)}"` : ""}>${last ? "" : `<i class="bk2-empty">${doodle("camera", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i>`}</span><span class="bk2-l"><b>${T("相册", "Album")}</b><small>${photos.length} ${T("张照片", "photos")}</small></span></button>
       <button class="bk2-t" data-open="archive"><span class="bk2-pv st">${stampsFan.length ? stampsFan.map((x, i) => `<i style="--i:${i}">${postageStamp(x.name, x.city, x.date)}</i>`).join("") : `<i class="bk2-empty">${doodle("ticket", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i>`}</span><span class="bk2-l"><b>${T("邮票集", "Stamps")}</b><small>${places.length} ${T("张", "stamps")}</small></span></button>
       <button class="bk2-t" data-open="passport"><span class="bk2-pv pp">${inks.length ? inks.map((x, i) => `<i style="--i:${i}">${stampFor(x)}</i>`).join("") : `<i class="bk2-empty">${doodle("star", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i>`}</span><span class="bk2-l"><b>${T("印章护照", "Passport")}</b><small>${seals.length} ${T("枚入境章", "entry")} · ${places.length + exps.length} ${T("枚印章", "seals")}</small></span></button>
       <button class="bk2-t" data-open="diary"><span class="bk2-pv dy" id="bk2Diary"><em>${T("写几句今天…", "A few lines…")}</em></span><span class="bk2-l"><b>${T("旅行日记", "Diary")}</b><small>${T("每天一页，只有你看得到", "One page a day, private")}</small></span></button>
       <button class="bk2-t" data-open="wallet"><span class="bk2-pv wl" id="bk2Wallet"><i class="bk2-empty">${doodle("noodles", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i></span><span class="bk2-l"><b>${T("美食票夹", "Food tickets")}</b><small><span id="walletCount">0</span> ${T("张", "tickets")}</small></span></button>
-      <button class="bk2-t ready" data-open="receipt"><span class="bk2-pv rc"><i></i></span><span class="bk2-l"><b>${T("旅行发票", "Receipt")}</b><small>${ended ? T("旅行结束了，打印整趟", "The whole trip") : T("随时可以打印，截至今天", "Print anytime, up to today")}</small></span></button>
+      <button class="bk2-t" data-open="shared"><span class="bk2-pv sh" id="bk2Shared"><i class="bk2-empty">${doodle("camera", { sketch: true, accent: "#c8c8cc", ink: "#c8c8cc" })}</i></span><span class="bk2-l"><b>${T("大家的相册", "Everyone's photos")}</b><small id="bk2SharedN">${T("房间里每个人都看得到", "Everyone in the room")}</small></span></button>
     </div>
     <p class="col-note"><button class="linkbtn" data-act="how">${T("印章和邮票怎么收集？", "How do I collect stamps?")}</button></p>`;
+  api.sharedPhotos().then(async L => { const el = $("bk2Shared"), n = $("bk2SharedN"); if (n) n.textContent = L.length ? `${L.length} 张 · 大家都看得到` : "房间里每个人都看得到"; if (el && L.length) { el.innerHTML = L.slice(0, 4).map(p => `<i class="bk2-sp" data-p="${esc(p.photo_path)}"></i>`).join(""); for (const d of el.querySelectorAll("[data-p]")) { const u = await api.sharedUrl(d.dataset.p); if (u && d.isConnected) d.style.backgroundImage = `url("${u}")`; } } }).catch(() => {});
   import("./tickets.js").then(m => { const W = (m.walletItems ? m.walletItems() : []).slice(-3), el = $("bk2Wallet"); if (el && W.length) el.innerHTML = W.map((w, i) => `<i class="bk2-stub" style="--i:${i}"><span>${foodArt(w.name)}</span><b>${esc(w.name)}</b></i>`).join(""); });
   import("../lib/journal.js").then(async m => { const J = await m.getJournal(t.id), txt = J.summary || Object.keys(J.days).sort().map(k => J.days[k]).filter(Boolean).pop() || ""; const el = $("bk2Diary"); if (el && txt) el.innerHTML = `<p>${esc(txt.slice(0, 60))}</p>`; });
   root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => { sfx.click(); OPEN[b.dataset.open](); });
@@ -99,8 +100,9 @@ const OPEN = {
     pages.push(`<div class="pp-page visa blank"><div class="pp-h"><b>待盖章</b><small>下一个地方</small></div><p class="pp-empty">这一页留给下一段旅程。</p></div>`);
     openFlipbook({ pages, theme: "passport", title: "印章护照" });
   },
-  album() {
-    const ph = tripStamps().filter(s => s.photo_path), t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id);
+  async album() {
+    let fp = []; try { fp = (await api.foodPhotos()).filter(x => x.user_id === api.me.id); } catch (e) {}
+    const ph = [...tripStamps().filter(s => s.photo_path), ...fp.map(f => ({ photo_path: f.photo_path, name: f.food, date: f.date, food: true }))], t = api.trip, dep = departuresOf().find(d => d.user_id === api.me.id);
     const byDay = {}; ph.forEach(s => (byDay[s.date] = byDay[s.date] || []).push(s));
     if (dep && dep.photo_path) (byDay[t.start_date] = byDay[t.start_date] || []).unshift({ photo_path: dep.photo_path, name: "出发", date: t.start_date, shared: true });
     const months = []; for (let d = t.start_date.slice(0, 7) + "-01"; d <= t.end_date; ) { months.push(d.slice(0, 7)); const [y, m] = d.split("-").map(Number); d = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-01`; }
@@ -109,10 +111,10 @@ const OPEN = {
       const [y, m] = mo.split("-").map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
       const cells = []; for (let i = 0; i < lead; i++) cells.push(`<div class="cal-c empty"></div>`);
       for (let d = 1; d <= n; d++) { const iso = `${mo}-${String(d).padStart(2, "0")}`, inTrip = iso >= t.start_date && iso <= t.end_date, p = byDay[iso];
-        cells.push(`<div class="cal-c${inTrip ? " trip" : ""}${p ? " has" : ""}" ${p ? `data-cpath="${esc(p[0].photo_path)}" data-day="${iso}"` : ""}><span>${d}</span>${p && p.length > 1 ? `<i>${p.length}</i>` : ""}</div>`); }
+        cells.push(`<div class="cal-c${inTrip ? " trip" : ""}${p ? " has" : ""}" ${p ? `${p[0].food ? "data-spath" : "data-cpath"}="${esc(p[0].photo_path)}" data-day="${iso}"` : ""}><span>${d}</span>${p && p.length > 1 ? `<i>${p.length}</i>` : ""}</div>`); }
       return `<div class="al-page cal"><div class="cal-h"><b>${MZ[m]}</b><em>${y}</em><span>${String(m).padStart(2, "0")}</span></div><div class="cal-w">${"一二三四五六日".split("").map(x => `<span>${x}</span>`).join("")}</div><div class="cal-g">${cells.join("")}</div></div>`;
-    }), ...Object.keys(byDay).sort().map(d => `<div class="al-page day"><div class="cal-h"><b>${shortDate(d)}</b><em>${weekday(d)} · ${esc(cityOf(d))}</em></div><div class="day-ph">${byDay[d].map(s => `<figure><div class="dp" data-cpath="${esc(s.photo_path)}"></div><figcaption>${esc(short(s.name))}</figcaption></figure>`).join("")}</div></div>`)];
-    openFlipbook({ pages, theme: "album", title: "相册", after: async ov => { for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
+    }), ...Object.keys(byDay).sort().map(d => `<div class="al-page day"><div class="cal-h"><b>${shortDate(d)}</b><em>${weekday(d)} · ${esc(cityOf(d))}</em></div><div class="day-ph">${byDay[d].map(s => `<figure><div class="dp" ${s.food ? "data-spath" : "data-cpath"}="${esc(s.photo_path)}"></div><figcaption>${esc(short(s.name))}</figcaption></figure>`).join("")}</div></div>`)];
+    openFlipbook({ pages, theme: "album", title: "相册", after: async ov => { for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } for (const el of ov.querySelectorAll("[data-spath]")) { const u = await api.sharedUrl(el.dataset.spath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
   },
   archive() {
     const ss = tripStamps().filter(s => s.kind === "place" || s.kind === "special" || s.kind === "experience");
@@ -134,6 +136,7 @@ const OPEN = {
   },
   diary() { import("./today.js").then(m => m.openDiary()); },
   receipt() { openReceipt(); },
+  shared() { import("./shared.js").then(m => m.openShared()); },
 };
 export const openBookPart = k => OPEN[k] && OPEN[k]();
 
@@ -192,7 +195,7 @@ export function openStampViewer(list, i = 0) {
   ov.innerHTML = `<div class="sv-top"><small id="svWhen"></small><button class="sc-x" aria-label="${T("关闭", "Close")}">×</button></div>
     <div class="sv-stage"><div class="sv-card" id="svCard"><div class="sv-face sv-front" id="svFront"></div><div class="sv-face sv-back" id="svBack"></div><div class="sv-holo" id="svHolo"></div></div></div>
     <p class="sv-name" id="svName"></p><div class="sv-dots" id="svDots"></div>
-    <div class="sv-bar"><button data-a="fav" aria-label="${T("收藏", "Favourite")}">☆</button><button data-a="flip" aria-label="${T("翻面", "Flip")}">↻</button><button data-a="next" aria-label="${T("下一张", "Next")}">→</button></div>`;
+    <div class="sv-bar"><button data-a="del" aria-label="${T("删除", "Delete")}">×</button><button data-a="share" aria-label="${T("分享给大家", "Share")}">⇪</button><button data-a="fav" aria-label="${T("收藏", "Favourite")}">☆</button><button data-a="flip" aria-label="${T("翻面", "Flip")}">↻</button><button data-a="next" aria-label="${T("下一张", "Next")}">→</button></div>`;
   document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add("on")); mus.chime(2, .025); mus.chime(4, .02, .08);
   const card = ov.querySelector("#svCard"), holo = ov.querySelector("#svHolo"); let flipped = false, rx = 0, ry = 0;
   const show = (dir = 0) => { const st = list[i], f = favs();
@@ -217,6 +220,8 @@ export function openStampViewer(list, i = 0) {
   window.addEventListener("deviceorientation", orient);
   ov.querySelector(".sc-x").onclick = () => { window.removeEventListener("deviceorientation", orient); ov.classList.remove("on"); setTimeout(() => ov.remove(), 350); };
   ov.querySelector("[data-a=flip]").onclick = flip; ov.querySelector("[data-a=next]").onclick = () => go(1);
+  ov.querySelector("[data-a=share]").onclick = async () => { const st = list[i]; if (!st || !st.photo_path) return toast("这枚章没有照片"); try { const u = await api.photoUrl(st.photo_path); const blob = await (await fetch(u)).blob(); const path = api.mode === "local" ? u : await api.uploadShared(blob); await api.addSharedPhoto(path, st.name, st.date); mus.chime(5, .03); toast("放进大家的相册了"); } catch (e) { toast("没能分享：" + e.message); } };
+  ov.querySelector("[data-a=del]").onclick = async () => { const st = list[i]; if (!st) return; if (!confirm(`删掉「${st.name}」这枚章？盖错了可以重新打卡。`)) return; try { await api.deleteStamp(st.id); toast("删掉了"); ov.remove(); document.querySelector(".arch .sc-x") && document.querySelector(".arch .sc-x").click(); } catch (e) { toast("没能删：" + e.message); } };
   ov.querySelector("[data-a=fav]").onclick = () => { const f = favs(), id = list[i].id; f.has(id) ? f.delete(id) : (f.add(id), mus.chime(4, .03), mus.chime(6, .02, .1)); localStorage.setItem("td-fav-stamps", JSON.stringify([...f])); show(); };
   ov.tabIndex = -1; ov.focus(); ov.addEventListener("keydown", e => { if (e.key === "ArrowRight") go(1); if (e.key === "ArrowLeft") go(-1); if (e.key === " ") flip(); });
   show();

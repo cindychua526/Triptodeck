@@ -12,6 +12,7 @@ import { guideFor } from "../data/guides.js";
 import { tripDays, cityOf, dayActs } from "./trip.js";
 import { sunTimes } from "../lib/sun.js";
 import { ic } from "../lib/icons.js";
+import { CARD } from "../data/skills.js";
 import { lang } from "../lib/i18n.js";
 
 let WX = null, WXcity = null;
@@ -56,7 +57,8 @@ export async function renderToday() {
     : [["fortune", T("拆一封今日旅运", "Open today's fortune"), fortuneDone, "envelope"], ["deck", T("抽一张牌，定今天的心情", "Draw a card for the day"), drawDone, "cards"], ["stamp", T("到一个地方，盖一个章", "Arrive somewhere, stamp it"), stampDone, "stamp"], ["spend", T("记一笔，撕一张美食票", "Log a spend, tear a food ticket"), spendDone, "receipt"], ["note", T("睡前写一句今天，选一个字", "One line before sleep, one word"), !!note, "pencil-simple-line"]];
   const B2 = await import("./budget.js"), todaySpend = B2.exps.filter(e => e.date === d && !e.prepaid), tot = todaySpend.reduce((q, e) => q + B2.myShare(e), 0);
   let ritEl = el.querySelector("#ritSlot"); if (!ritEl) { ritEl = document.createElement("div"); ritEl.id = "ritSlot"; el.appendChild(ritEl); }
-  ritEl.innerHTML = `<div class="rit"><div class="rit-h"><small>SLOW DOWN</small><b>${T("今天的五件小事", "Five small things today")}</b><span>${R.filter(r => r[2]).length}/${R.length}</span></div>
+  let live = ""; try { const N = await import("../lib/notices.js"); live = N.countdownHTML(); const fx = (await api.effects()).filter(x => x.target_date === d && !x.resolved); if (fx.length) live += `<div class="ooc-banner"><i>失控</i><div>${fx.map(x => `<b>${x.card} · ${CARD[x.card] ? CARD[x.card].name : ""}</b><span>${esc(x.description)}${x.detail ? "：" + esc(x.detail) : ""}</span>`).join("")}</div></div>`; } catch (e) {}
+  ritEl.innerHTML = live + `<div class="rit"><div class="rit-h"><small>SLOW DOWN</small><b>${T("今天的五件小事", "Five small things today")}</b><span>${R.filter(r => r[2]).length}/${R.length}</span></div>
     ${R.map(([k, l, done, i]) => `<button class="rit-row${done ? " done" : ""}" data-rit="${k}"><i>${done ? ic("check") : ""}</i><span>${l}</span>${ic(i === "envelope" ? "ticket" : i)}</button>`).join("")}</div>
     <button class="rcp" data-rit="budget"><small>TODAY'S RECEIPT · ${d.slice(5).replace("-", ".")}</small>${todaySpend.length ? todaySpend.slice(0, 4).map(e => `<span><b>${esc(e.note || e.category)}</b><em>${B2.money(B2.myShare(e))}</em></span>`).join("") : `<span><b>${T("今天还没花钱", "Nothing spent yet")}</b><em>—</em></span>`}<strong><b>${T("今日合计", "Today")}</b><em>${B2.money(tot)}</em></strong></button>${await extrasHTML(d, days, gg)}`;
   el.querySelectorAll("[data-rit]").forEach(b => b.onclick = () => { const k = b.dataset.rit; mus.pluck(2, .03); if (k === "fortune") document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "center" }); else if (k === "note") openDiary(inTrip ? d : null); else if (k === "stamp") window.tdGo && window.tdGo("trip"); else if (k === "deck") window.tdGo && window.tdGo("deck"); else if (k === "spend") window.tdGo && window.tdGo("tear"); else if (k === "budget") window.tdGo && window.tdGo("budget"); else if (k === "poster") { localStorage.setItem("td-poster-seen:" + api.trip.id, "1"); import("./collection.js").then(m => m.openPoster()); } else if (k === "letter") openLetter(d); else if (k === "moment") askMoment(d); });

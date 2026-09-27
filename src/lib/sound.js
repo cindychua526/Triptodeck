@@ -127,3 +127,21 @@ sfx.activate = () => [0, 2, 4, 7].forEach((d, k) => INST[theme](note(2 + d), .04
 sfx.reveal = () => { for (let k = 0; k < 6; k++) INST[theme](note(3 + k), .03, k * .06); };
 sfx.bell = () => INST[theme](note(7), .045, 0);
 sfx.fail = () => { INST[theme](note(4), .035); INST[theme](note(1), .035, .16); };
+
+/* one big sound per card, for when a skill fires (yours or someone else's) */
+export function cardFx(k) {
+  const c = ready(); if (!c) return;
+  switch (String(k)) {
+    case "K": [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, 1.2, "sine", .04, i * .05)); [1046, 784, 659, 523].forEach((f, i) => tone(f, .9, "sine", .03, .5 + i * .07)); break;                 // mirror: up, then back
+    case "Q": for (let i = 0; i < 6; i++) { noise(.03, .05, i * .18, 2600, 3); tone(880, .05, "square", .02, i * .18); } tone(220, 1.6, "sine", .05, 1.1, 110); break;                                   // clock ticks, then time slows
+    case "J": [392, 523, 659].forEach((f, i) => tone(f, .7, "triangle", .05, i * .08)); tone(880, 1.4, "sine", .04, .4, 440); noise(.6, .02, .4, 900, .6, 3000); break;                                    // a red string plucked
+    case "10": [523, 659, 784].forEach((f, i) => tone(f, .35, "triangle", .06, i * .12)); [1046, 1318].forEach((f, i) => tone(f, 1.1, "triangle", .05, .45 + i * .15)); metal(1568, .03, .9, 1.6); break;   // fanfare
+    case "9": tone(200, .5, "sine", .06, 0, 1600); noise(.5, .04, 0, 1200, .8, 6000); tone(1600, .4, "sine", .03, .45, 200); break;                                                                      // portal whoosh
+    case "8": [261, 329, 392, 523].forEach((f, i) => tone(f * (1 + Math.sin(i) * .01), 2.2, "sine", .03, i * .3)); noise(2, .015, 0, 400, 1.5); break;                                                    // a dream, out of tune
+    case "7": noise(.18, .06, 0, 3000, 2, 800); tone(1200, .18, "sine", .04, 0, 300); tone(90, .6, "sine", .09, .22); noise(.25, .05, .22, 200, 1.5); break;                                                // arrow flies, hits
+    case "6": noise(1.6, .12, 0, 120, 2.5, 60); tone(55, 1.8, "sine", .1, .05, 30); [0, .35, .7].forEach(w => noise(.12, .05, w, 3000, 3)); break;                                                          // thunder
+    case "4": metal(660, .05, 0, 2.2); metal(495, .04, .5, 2.2); metal(330, .05, 1, 3); break;                                                                                                            // temple bell, three strikes
+    case "X": noise(1.4, .04, 0, 600, 1.2, 2400); [440, 415, 466, 440].forEach((f, i) => tone(f, .5, "sine", .03, i * .3)); break;                                                                          // wind, a wavering note
+    default: sfx.success();
+  }
+}

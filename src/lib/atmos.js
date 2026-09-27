@@ -56,5 +56,5 @@ export function celebrate() {
   mus.pop(); setTimeout(() => mus.harp(4, 5, .05), 120); buzz([10, 30, 10]);
   let n = 0; const loop = () => { n++; x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += .04; p.l -= .014; x.globalAlpha = Math.max(0, p.l); x.fillStyle = p.c; x.beginPath(); x.arc(p.x, p.y, 2.2, 0, 7); x.fill(); }); if (n < 80) requestAnimationFrame(loop); else c.remove(); }; requestAnimationFrame(loop);
 }
-on("trip", () => setTimeout(refresh, 300)); on("skill_log", refresh);
+on("trip", () => setTimeout(refresh, 300)); on("skill_log", refresh); on("skill_draws", refresh);
 if (typeof window !== "undefined") { window.tdCelebrate = celebrate; setTimeout(refresh, 800); setInterval(refresh, 60000); }

@@ -80,7 +80,7 @@ async function toss(power = 1) {
   const res = Math.random() < .5 ? "heads" : "tails", c = $("coin"), sh = $("coinShadow");
   const turns = 5 + Math.round(power * 3), end = turns * 360 + (res === "tails" ? 180 : 0), h = Math.round(150 + power * 110), dur = 1300 + power * 380;
   const fin = () => { rest = res === "tails" ? 180 : 0; c.style.transform = `rotateX(${rest}deg)`; landed(res); };
-  if (REDUCE) { await c.animate([{ opacity: 1 }, { opacity: .2 }, { opacity: 1 }], { duration: 500 }).finished; return fin(); }
+  if (REDUCE) { await c.animate([{ transform: "rotateX(0deg)" }, { transform: `rotateX(${360 + (res === "tails" ? 180 : 0)}deg)` }], { duration: 700, easing: "cubic-bezier(.2,.8,.3,1)" }).finished; return fin(); }
   const spinZ = (Math.random() - .5) * 40;
   c.animate([
     { transform: `translateY(0) rotateX(${rest}deg) rotateZ(0deg) scale(1)`, easing: "cubic-bezier(.15,.65,.35,1)" },
@@ -109,7 +109,7 @@ async function landed(res) {
   pending = { res, q, reversed, fxId: reversed ? fxId : null };
   $("coinRes").innerHTML = `${sealHTML(res, label)}<p class="res-txt">${q ? `「${esc(q)}」` : ""}${reversed ? "命运改写失控，结果被反转了！" : ""}铜钱说：<b>${esc(label)}</b></p>
     <div class="coin-btns"><button class="btn" id="coinAgain">再抛一次</button><button class="btn ink" id="coinKeep">${rewrite ? "就按这次改写" : "就这么定了"}</button></div>`;
-  setTimeout(() => { const s = $("coinSeal"); s && s.classList.add("on"); sfx.stamp(); }, 150);
+  setTimeout(() => { const s = $("coinSeal"); s && s.classList.add("on"); sfx.stamp(); $("coinRes").scrollIntoView({ behavior: "smooth", block: "center" }); }, 150);
   $("coinHint").textContent = reversed ? "失控效果已生效" : "满意就定下来，不满意就再抛";
   $("coinAgain").onclick = () => toss(1); $("coinKeep").onclick = keep;
 }
@@ -117,7 +117,7 @@ async function keep() {
   if (!pending) return; const p = pending; pending = null;
   try {
     if (rewrite) { await api.updateDecision(rewrite.id, { result: p.res, rewritten: { from: rewrite.result, at: new Date().toISOString() } }); toast("命运已改写"); rewrite = null; }
-    else { await api.addDecision({ date: today(), question: p.q || "一个小决定", mode, result: p.res, reversed: p.reversed }); toast("决定已记下"); }
+    else { await api.addDecision({ date: today(), question: p.q || "一个小决定", mode, result: p.res, reversed: p.reversed }); toast("决定已记下"); try { api.addLog(today(), null, "DECIDED", `铜钱定了：${p.q || "一个小决定"} → ${modeObj()[p.res]}`); } catch (e) {} }
     if (p.fxId) api.resolveEffect(p.fxId, "第一个决定已被反转").catch(() => {});
     sfx.success(); $("coinRes").innerHTML = `<p class="res-txt">✓ 已记下</p>`; $("coinQ").value = "";
     checkFx();

@@ -8,6 +8,7 @@ import { GUIDES, guideFor } from "../data/guides.js";
 /* food tickets: this module keeps its own city / food tables */
 const COUNTRY = {}, CITY = {}, SPOTS = [];
 import { api } from "../lib/api.js";
+import { esc } from "../lib/util.js";
 import { sfx } from "../lib/sound.js";
 import { today as todayFn, shrinkImage, dataUrlToBlob } from "../lib/util.js";
 import { on, nameOf } from "../lib/api.js";
@@ -34,7 +35,7 @@ function frontHTML(s,meta,tw){
   return `<div class="tk" style="--c:${c.color};--tw:${tw}px">
     <div class="tk-main">
       <div class="tk-top"><span>Taste of ${c.en}</span><span>${meta.serial}</span></div>
-      <div class="tk-name">${s.name}</div>
+      <div class="tk-name${s.name.length>9?" xlong":s.name.length>5?" long":""}">${s.name}</div>
       <div class="tk-en">${s.en}</div>
       <p class="tk-mean">${s.mean}</p>
       <div class="tk-foot"><span>${meta.date.replace(/-/g,".")}</span><em>${s.tag}</em></div>
@@ -49,7 +50,7 @@ function blankHTML(s,tw){
     <i class="edge-l"></i>
     <div class="tk-main">
       <div class="tk-top"><span>Food Ticket</span><span>No. ????</span></div>
-      <div class="tk-name">${s.name}</div>
+      <div class="tk-name${s.name.length>9?" xlong":s.name.length>5?" long":""}">${s.name}</div>
       <div class="tk-en">${c.name} · ${s.en||"local food"}</div>
       <div class="bl-q">食</div>
       <div class="tk-foot"><span>吃到了就撕下</span></div>
@@ -182,7 +183,7 @@ function paperBits(x,y,h,color){
     b.animate([{transform:"none",opacity:1},{transform:`translate(${-6-Math.random()*40}px,${40+Math.random()*80}px) rotate(${Math.random()*540}deg)`,opacity:0}],{duration:900+Math.random()*500,easing:"cubic-bezier(.2,.6,.4,1)"}).onfinish=()=>b.remove();
   }
 }
-function openSheet(fromWallet){
+function openSheet(fromWallet, inSheet){
   const {s,meta,again}=cur, c=CITY[s.c], k=COUNTRY[c.k], sh=$("sheet");
   sh.style.setProperty("--c",c.color);
   const near=located?`，距你约 ${dist(located.lat,located.lng,s.lat,s.lng).toFixed(1)} 公里`:"";
@@ -191,16 +192,19 @@ function openSheet(fromWallet){
     <div class="sh-block"><b>是什么</b><p>${s.mean}</p></div>
     ${s.where?`<div class="sh-block"><b>去哪吃</b><p>${s.where}</p></div>`:""}
     ${s.o?`<div class="sh-block"><b>出处</b><p>${s.o}</p></div>`:""}
-    ${fromWallet?(meta.rating?`<div class="sh-block"><b>你的评价</b><p>${RATE[meta.rating][1]} ${RATE[meta.rating][0]}</p></div>`:""):`<div class="rate-row" role="radiogroup" aria-label="好不好吃">${Object.entries(RATE).map(([k,[t,e]])=>`<button class="rate${cur.rating===k?" on":""}" data-rate="${k}" role="radio" aria-checked="${cur.rating===k}"><span>${e}</span>${t}</button>`).join("")}</div>`}
+    ${fromWallet?`<div class="sh-block"><b>你的评价 · 可以改</b></div><div class="rate-row" role="radiogroup" aria-label="好不好吃">${Object.entries(RATE).map(([k,[t,e]])=>`<button class="rate${meta.rating===k?" on":""}" data-rate="${k}" role="radio" aria-checked="${meta.rating===k}"><span>${e}</span>${t}</button>`).join("")}</div>`:`<div class="rate-row" role="radiogroup" aria-label="好不好吃">${Object.entries(RATE).map(([k,[t,e]])=>`<button class="rate${cur.rating===k?" on":""}" data-rate="${k}" role="radio" aria-checked="${cur.rating===k}"><span>${e}</span>${t}</button>`).join("")}</div>`}
     <div class="sh-block sh-photos"><b>大家拍的</b><div class="shp-row" id="shPhotos"></div><label class="shp-add">${ic("camera")} 上传这道菜的照片<input type="file" accept="image/*" id="shPhotoIn" hidden></label></div>
     <div class="sh-meta">${fromWallet?`${meta.date.replace(/-/g,".")} 收进票夹　${meta.serial}`:(again?"这张你已经收藏过了，可以更新打卡日期":"第一次来这里打卡")+near}</div>
     <div class="sh-btns">${fromWallet
-      ?`<button class="btn" id="shRemove">移出票夹</button><button class="btn solid" id="shClose">收好了</button>`
+      ?`<button class="btn" id="shRemove">移出票夹</button><button class="btn" id="shLog">记这一笔</button><button class="btn solid" id="shClose">收好了</button>`
       :`<button class="btn" id="shAgain">放回去</button><button class="btn solid" id="shSave">${again?"更新打卡日期":"收进票夹"}</button>`}</div>`;
   requestAnimationFrame(()=>sh.classList.add("on"));
   foodPhotosInto($("shPhotos"), s.name, c.name);
   $("shPhotoIn").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const small=await shrinkImage(f, api.mode==="local"?600:1280, .8); const path=api.mode==="local"?small:await api.uploadShared(dataUrlToBlob(small)); await api.addFoodPhoto({ food:s.name, city:c.name, date:todayFn(), photo_path:path }); toast("照片放进大家的手帐了"); foodPhotosInto($("shPhotos"), s.name, c.name); }catch(err){ toast("没能上传："+err.message); } };
   if(fromWallet){
+    sh.querySelectorAll("[data-rate]").forEach(b=>b.onclick=()=>{ const w=inWallet(s.id); if(!w) return; w.rating=w.rating===b.dataset.rate?null:b.dataset.rate; persistOne(w); sh.querySelectorAll("[data-rate]").forEach(x=>{ x.classList.toggle("on",x.dataset.rate===w.rating); x.setAttribute("aria-checked",x.dataset.rate===w.rating); }); sfx.tap(); renderWallet(); });
+    if(inSheet){ sh.insertAdjacentHTML("afterbegin",`<div class="sh-ticket">${frontHTML(s,meta,Math.min(innerWidth*0.86,360))}</div>`); sh.classList.add("with-ticket"); }
+    $("shLog").onclick=()=>{ closeReveal(); setTimeout(()=>import("./budget.js").then(m=>m.openAdd({ category:/(奶茶|拉茶|咖啡|kopi|茶饮|饮|果汁|汁|冰沙|冰$|茶$)/i.test(s.name)&&!/面|饭|粥|汤|鸭|鸡|肉|粿|饼/.test(s.name)?"Coffee":"Food", note:s.name, date:meta.date, onSaved:()=>toastU("记好了") })),350); };
     $("shClose").onclick=()=>closeReveal();
     $("shRemove").onclick=()=>{ wallet=wallet.filter(w=>w.id!==s.id); api.removeWallet(s.id).catch(()=>{}); updateBadge(); closeReveal(true); renderSpots(); toast(`已把${s.name}移出票夹`); };
   }else{
@@ -210,7 +214,7 @@ function openSheet(fromWallet){
   }
 }
 async function closeReveal(removed){
-  $("sheet").classList.remove("on"); $("overlay").classList.remove("on");
+  $("sheet").classList.remove("on","with-ticket"); $("overlay").classList.remove("on");
   const f=fly; fly=null;
   if(f){ await f.animate([{opacity:1},{opacity:0,transform:getComputedStyle(f).transform+" translateY(60px)"}],{duration:350,easing:"ease-in",fill:"forwards"}).finished; f.remove(); }
   busy=false; rig.classList.remove("pulling");
@@ -267,19 +271,24 @@ function renderWallet(){
   list.innerHTML=shown.map(w=>{ const s=spotById(w.id); return `<div class="w-item${w.id===justAdded?" new":""}" data-id="${w.id}" role="button" aria-label="${s.name}">${frontHTML(s,{date:w.date,serial:w.serial,rating:w.rating},tw)}</div>`; }).join("");
   justAdded=null;
   list.querySelectorAll(".w-item").forEach(el=>el.addEventListener("click",()=>openFromWallet(el)));
+  buddyTickets();
+}
+/* tickets your buddies tore that you don't have: take one if you ate it too */
+const nameOfBuddy=id=>{ const m=(api.members||[]).find(x=>x.id===id); return m?m.name:"旅伴"; };
+async function buddyTickets(){
+  const list=$("wList"); if(!list) return; let B=[]; try{ B=await api.buddyWallet(); }catch(e){ return; }
+  const no=(()=>{ try{ return new Set(JSON.parse(localStorage.getItem("td-buddy-no")||"[]")); }catch(e){ return new Set(); } })();
+  const byId={}; B.forEach(r=>{ if(inWallet(r.spot_id)||no.has(r.spot_id)||!spotById(r.spot_id)) return; (byId[r.spot_id]=byId[r.spot_id]||[]).push(r); });
+  const ids=Object.keys(byId); list.querySelector(".w-buddy")?.remove(); if(!ids.length) return;
+  list.insertAdjacentHTML("beforeend",`<div class="w-buddy"><div class="sk-sec-h">BUDDIES <b>旅伴撕的票</b></div><p class="as-hint">你也吃了就收下，没吃就不要。只影响你自己的票夹。</p>${ids.map(id=>{ const s=spotById(id), rs=byId[id]; return `<div class="wb-row"><span class="wb-art">${foodArt(s.name)}</span><span class="wb-t"><b>${s.name}</b><small>${rs.map(r=>esc(nameOfBuddy(r.user_id))).join("、")} · ${rs[0].date}</small></span><button class="btn sm" data-no="${id}">没吃</button><button class="btn sm ink" data-take="${id}" data-date="${rs[0].date}">收下</button></div>`; }).join("")}</div>`);
+  list.querySelectorAll("[data-take]").forEach(b=>b.onclick=()=>{ const w={id:b.dataset.take,date:b.dataset.date,serial:`No. ${String(wallet.length+1).padStart(3,"0")}`,rating:null,t:Date.now()}; wallet.push(w); persistOne(w); updateBadge(); sfx.stamp(); toastU(`收下了「${spotById(w.id).name}」`); justAdded=w.id; renderWallet(); renderSpots(); });
+  list.querySelectorAll("[data-no]").forEach(b=>b.onclick=()=>{ no.add(b.dataset.no); localStorage.setItem("td-buddy-no",JSON.stringify([...no])); b.closest(".wb-row").remove(); });
 }
 function openFromWallet(el){
   if(fly) return;
   const w=inWallet(el.dataset.id), s=spotById(w.id), r=el.getBoundingClientRect();
   cur={s,meta:{date:w.date,serial:w.serial,rating:w.rating},again:true};
-  fly=document.createElement("div"); fly.className="fly";
-  Object.assign(fly.style,{left:r.left+"px",top:r.top+"px",width:r.width+"px",height:r.height+"px"});
-  fly.innerHTML=`<div class="flipper">${frontHTML(s,cur.meta,r.width)}<div class="shine"></div></div>`;
-  document.body.appendChild(fly);
-  $("overlay").classList.add("on");
-  const W=Math.min(innerWidth*0.9,400), sc=W/r.width, tx=(innerWidth-W)/2-r.left, ty=Math.max(84,innerHeight*0.16)-r.top;
-  fly.animate([{transform:"none"},{transform:`translate(${tx}px,${ty}px) rotate(-2deg) scale(${sc})`,offset:.75},{transform:`translate(${tx}px,${ty}px) scale(${sc})`}],{duration:600,easing:"cubic-bezier(.22,1,.36,1)",fill:"forwards"}).finished.then(()=>fly&&fly.querySelector(".shine").classList.add("go"));
-  buzz(8); openSheet(true);
+  $("overlay").classList.add("on"); buzz(8); openSheet(true, true);
 }
 $("overlay").addEventListener("click",()=>{ if(fly) closeReveal(); });
 
@@ -336,7 +345,8 @@ function openAddFood(){
 /* shared food photos: anyone can add, everyone sees them in their book */
 export async function foodPhotosInto(el, food, city){ if(!el) return; let L=[]; try{ L=(await api.foodPhotos()).filter(p=>p.food===food); }catch(e){}
   el.innerHTML=L.length?L.map(p=>`<figure><div class="shp-ph" data-fp="${p.photo_path.replace(/"/g,"&quot;")}"></div><figcaption>${nameOf(p.user_id)}</figcaption></figure>`).join(""):`<p class="shp-empty">还没有人拍。第一个拍的人，照片会出现在每个人的手帐里。</p>`;
-  for(const d of el.querySelectorAll("[data-fp]")){ const u=d.dataset.fp.startsWith("data:")?d.dataset.fp:await api.sharedUrl(d.dataset.fp); if(u&&d.isConnected) d.style.backgroundImage=`url("${u}")`; } }
+  for(const d of el.querySelectorAll("[data-fp]")){ const u=d.dataset.fp.startsWith("data:")?d.dataset.fp:await api.sharedUrl(d.dataset.fp); if(u&&d.isConnected){ d.style.backgroundImage=`url("${u}")`; d.onclick=()=>bigPhoto(u, d.closest("figure").querySelector("figcaption").textContent); } } }
+function bigPhoto(u, who){ const v=document.createElement("div"); v.className="shp-view"; v.style.zIndex=140; v.innerHTML=`<img src="${u}" alt=""><div class="shp-bar"><span>${esc(who||"")}</span><div><button data-a="x">关闭</button></div></div>`; document.body.appendChild(v); const x=()=>v.remove(); v.querySelector("[data-a=x]").onclick=x; v.querySelector("img").onclick=x; }
 
 /* the whole wallet as one picture: a sheet of stubs on washi */
 async function exportWallet(items){
