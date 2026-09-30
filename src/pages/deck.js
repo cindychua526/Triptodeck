@@ -6,7 +6,7 @@ import { sfx } from "../lib/sound.js";
 import { SKILLS, CARD, ALL_CARDS, isMinor } from "../data/skills.js";
 import { notifyAll } from "../lib/notify.js";
 import { characterSVG, CARD_BACK, emblemSVG } from "../data/characters.js";
-import { acts, dayActs, usable, tripDays, openAdd } from "./trip.js";
+import { acts, dayActs, usable, tripDays, openAdd, getSelDate } from "./trip.js";
 import { openSpecial } from "./checkin.js";
 import { startRewrite, goCoin } from "./coin.js";
 
@@ -45,7 +45,7 @@ function render() {
   const root = $("deckRoot"); if (!root) return;
   const left = ALL_CARDS.length - table.length;
   let h = `<div class="sk-top"><button class="icon-btn" data-back aria-label="返回">${ic("arrow-left")} 返回</button><button class="icon-btn snd" aria-label="音效">🔊</button></div>
-    <div class="dk-title"><small>SKILL ACTIVATION · ${dayNo()}${shortDate(date)} ${weekday(date)}</small><h2>The Trip Deck</h2><p>六位神话里的守护者，今天只会有一位来找你。</p></div>
+    <div class="dk-title"><small>SKILL ACTIVATION · ${dayNo()}${shortDate(date)} ${weekday(date)}</small><h2>The Trip Deck</h2><p>神话里的守护者们，今天只会有一位来找你。</p></div>
     <div class="dk-stage" id="dkStage">`;
   if (loading) h += `<div class="oracle loading"><div class="odeck">${[0, 1, 2].map(i => backHTML(i)).join("")}</div></div><p class="o-hint">正在洗牌…</p>`;
   else if (!mine) {
@@ -57,13 +57,13 @@ function render() {
       : `<p class="empty">今天的牌都被请走了，明天再来。</p>`;
   } else h += `<div class="my-card" id="myCard">${cardHTML(mine.card, { state: stateOf(mine), cls: "hero powered" })}</div><p class="o-hint"><b>${CARD[mine.card].myth}</b>　${CARD[mine.card].mythEn}</p>`;
   h += `</div><div id="dkAct">${mine && !loading ? actionsHTML() : ""}</div>`;
-  const tFx = effects.filter(e => e.target_date === date), mFx = effects.filter(e => e.target_date === tomorrow());
+  const tFx = effects.filter(e => e.target_date === date && e.card !== "X"), mFx = effects.filter(e => e.target_date === tomorrow() && e.card !== "X");
   if (tFx.length) h += `<div class="sk-sec-h">TODAY'S EFFECTS <b>今天生效的失控</b></div>` + tFx.map(e => fxHTML(e)).join("");
   if (mFx.length) h += `<div class="sk-sec-h">TOMORROW <b>明天</b></div>` + mFx.map(e => fxHTML(e, true)).join("");
   h += `<div class="sk-sec-h">THE TABLE <b>今天的牌桌</b></div><div class="seats">${api.members.map(m => { const r = table.find(t => t.user_id === m.id);
       const inner = !r ? `<div class="seat-empty">还没抽</div>` : r.card ? cardHTML(r.card, { cls: "mini", state: r.status === "activated" ? "done" : "" }) : `<div class="tc mini down"><div class="tc-in"><div class="tc-face tc-back">${CARD_BACK}</div></div></div>`;
       return `<div class="seat"${r && r.card ? ` data-show="${r.card}" data-who="${esc(m.name)}" data-txt="${esc((r.activation && r.activation.text) || "")}"` : ""}>${inner}<b>${esc(m.name)}${m.id === api.me.id ? "（你）" : ""}</b><small>${!r ? "" : r.status === "activated" ? "✓ 已发动" : r.card ? "未发动" : "已抽 · 未揭晓"}</small></div>`; }).join("")}</div>`;
-  h += `<div class="sk-sec-h">SKILL LOG <b>技能日志</b></div><div class="log">${logs.length ? logs.slice(0, 40).map(l => `<div class="log-row"><time>${hm(l.created_at)}</time><div><b>${l.card && CARD[l.card] ? `${l.card} · ${CARD[l.card].name}` : "牌堆"}</b>　${({ DRAWN: "抽了一张牌", ACTIVATED: "发动", EFFECT: "⚠ 执行失控" })[l.action] || esc(l.action)}<br><span>${esc(nameOf(l.user_id))}</span>${l.effect && l.action !== "DRAWN" ? `<p>${esc(l.effect)}</p>` : ""}<small>${l.date !== today() ? shortDate(l.date) : ""}</small></div></div>`).join("") : `<div class="log-empty">还没有人抽牌。第一张会是谁？</div>`}</div>`;
+  h += `<div class="sk-sec-h">SKILL LOG <b>技能日志</b></div><div class="log">${logs.length ? logs.slice(0, 40).map(l => `<div class="log-row"><time>${hm(l.created_at)}</time><div><b>${l.card && CARD[l.card] ? `${l.card} · ${CARD[l.card].name}` : l.action === "DICE" ? "旅途骰子" : l.action === "PLAY" ? "小游戏" : "牌堆"}</b>　${({ DRAWN: "抽了一张牌", ACTIVATED: "发动", EFFECT: "⚠ 执行失控", DICE: "🎲 掷骰子", PLAY: "✦ 玩了一局" })[l.action] || esc(l.action)}<br><span>${esc(nameOf(l.user_id))}</span>${l.effect && l.action !== "DRAWN" ? `<p>${esc(l.effect)}</p>` : ""}<small>${l.date !== today() ? shortDate(l.date) : ""}</small></div></div>`).join("") : `<div class="log-empty">还没有人抽牌。第一张会是谁？</div>`}</div>`;
   root.innerHTML = h; wire(root);
 }
 function actionsHTML() {
@@ -72,18 +72,32 @@ function actionsHTML() {
   return `<div class="dk-note"><b>${s.key} · ${s.name}</b><p>${s.effect}</p><p class="warn-line">${ic("warning")} 今天不发动，明天会失控：${s.ooc}</p></div>
     <div class="dk-btns"><button class="btn accent full" style="--a:${s.bg2}" data-act="activate">发动技能 · ACTIVATE</button></div>`;
 }
+/* 失控: what each guardian says when their card was drawn and never used */
+export const OOC_LINE = {
+  K: "月镜没被照亮。嫦娥把昨天最后一道光，留到了今天。", Q: "羲和的马车晚出发了——今天的太阳，会晚半小时升起。", J: "红线松了。今天的第一个决定，会被悄悄系反。",
+  "10": "妈祖的灯没人接，今天她自己挑一个人掌舵。", "9": "风火轮没转起来，今天它要硬拉你们多去一个地方。", "8": "蝴蝶飞走了。梦里多出来的一站，今天要醒过来划掉。",
+  "7": "箭没射出去。今天，会有一个太阳自己掉下来。", "6": "雷公的鼓还没停，雨要一直下到中午。", "5": "雪女在门外等了一夜，今天整天都在飘雪。", "4": "土地公记下了。今天他盖的章，只有灰色——今天打卡拿到的每一枚章和邮票，都会是灰的。"
+};
+export const oocLine = k => OOC_LINE[k] || (CARD[k] ? `「${CARD[k].name}」昨天没有做，守护者今天来讨了。` : "昨天的牌没有发动。");
+/* the text was written the day before ("明天…"); on the day itself it reads as 今天 */
+export const oocText = (e, future) => { const t = (CARD[e.card] && CARD[e.card].ooc) || e.description || ""; return future ? t : t.replace(/明天/g, "今天"); };
+const FX_BTN = { "8": "选要删掉的地点", "9": "加一个计划外地点", "7": "让后羿射一箭", Q: "全部推迟 30 分钟", "10": "知道了" };
+export function fxAction(e) { if (e.card === "K") return /自动生效：(\w+)/.test(e.detail || "") ? ["K", "执行复制的技能"] : ["ok", "知道了"]; if (isMinor(e.card)) return ["redo", "今天补做"]; if (FX_BTN[e.card]) return [e.card === "10" ? "ok" : e.card, FX_BTN[e.card]]; return ["ok", e.card === "6" || e.card === "5" ? "知道了，天气变了" : "知道了"]; }
+const CRACK = `<svg class="fx2-crack" viewBox="0 0 100 148" aria-hidden="true"><path d="M58 0L50 34L62 52L44 80L56 104L46 148M50 34L30 44M62 52L84 60M44 80L20 92M56 104L78 120" fill="none" stroke="#fff" stroke-width="1.1" stroke-linejoin="bevel"/></svg>`;
 function fxHTML(e, future) {
-  const s = CARD[e.card] || {}, act = !future && !e.resolved ? ({ "8": `<button class="btn sm" data-fx="${e.id}" data-fk="8">选要删掉的地点</button>`, "9": `<button class="btn sm" data-fx="${e.id}" data-fk="9">加一个计划外地点</button>`, K: /自动生效：(\w+)/.test(e.detail || "") ? `<button class="btn sm" data-fx="${e.id}" data-fk="K">执行复制的技能</button>` : `<button class="btn sm" data-fx="${e.id}" data-fk="ok">知道了</button>` })[e.card] || `<button class="btn sm" data-fx="${e.id}" data-fk="ok">知道了</button>` : "";
-  return `<div class="fx${e.resolved ? " resolved" : ""}"><div class="fx-h"><span>${ic("warning")} ${esc(s.name || e.card)}（失控）</span><small>昨天没发动${e.resolved ? " · 已处理" : ""}</small></div><p>${esc(e.description)}${e.detail ? "<br><b>" + esc(e.detail) + "</b>" : ""}</p>${act ? `<div class="fx-act">${act}</div>` : ""}</div>`;
+  const s = CARD[e.card] || {}, [fk, label] = fxAction(e), act = !future && !e.resolved ? `<button class="btn sm ${fk === "ok" ? "" : "ink"}" data-fx="${e.id}" data-fk="${fk}">${label}</button>${fk !== "ok" ? `<button class="linkbtn" data-fxshow="${e.id}">重看失控</button>` : `<button class="linkbtn" data-fxshow="${e.id}">重看失控</button>`}` : "";
+  return `<div class="fx2${e.resolved ? " resolved" : ""}${future ? " future" : ""}"><div class="fx2-card">${CARD[e.card] ? cardHTML(e.card, { cls: "mini" }) : ""}${CRACK}<i class="fx2-seal">${e.resolved ? "已平息" : "失控"}</i></div>
+    <div class="fx2-body"><small>${esc(s.myth || "")}${future ? " · 明天" : e.resolved ? " · 已处理" : " · 昨天没发动"}</small><b>${esc(e.card)} · ${esc(s.name || "")}</b><em>${esc(oocLine(e.card))}</em><p>${esc(oocText(e, future))}${e.detail ? "<br><strong>" + esc(e.detail) + "</strong>" : ""}</p>${act ? `<div class="fx-act">${act}</div>` : ""}</div></div>`;
 }
 function wire(root) {
   const o = $("oracle"); if (o) holdToDraw(o);
   root.querySelectorAll(".seat[data-show]").forEach(sd => sd.onclick = () => { const k = sd.dataset.show, c = CARD[k]; if (!c) return; sfx.flip();
     openSheet(`<div class="as show-card"><small class="as-k">${esc(sd.dataset.who)} · ${sd.dataset.txt ? "已发动" : "还没发动"}</small><div class="show-big">${cardHTML(k, { cls: "hero" })}</div><h3>${k} · ${c.name}</h3><p class="show-myth">${c.myth}</p><p>${c.effect}</p>${sd.dataset.txt ? `<p class="show-txt">${esc(sd.dataset.txt)}</p>` : ""}<p class="as-hint">失控：${c.ooc}</p><div class="as-btns"><button class="btn full" data-act="close">好</button></div></div>`);
     bind(document.querySelector(".usheet"), { close: () => closeSheet() }); });
-  import("../lib/atmos.js").then(async A => { const a = await A.todaysAtmos(); const top = root.querySelector(".tp-top, .ph"); if (a && top && !root.querySelector(".atm-card")) top.insertAdjacentHTML("afterend", `<div class="atm-card"><small>今日氛围牌 · 自动出现，人人都有</small><b>${A.ATMOS[a].name}</b><span>${A.ATMOS[a].hint}</span></div>`); });
+  import("../lib/atmos.js").then(async A => { const a = await A.todaysAtmos(); const top = root.querySelector(".dk-title, .tp-top, .ph"); if (a && top && !root.querySelector(".atm-card")) top.insertAdjacentHTML("afterend", `<div class="atm-card"><small>今日氛围牌 · 自动出现，人人都有</small><b>${A.ATMOS[a].name}</b><span>${A.ATMOS[a].hint}</span></div>`); });
   const mc = $("myCard"); if (mc) { const c = mc.querySelector(".tc"); mc.onclick = () => { c.classList.remove("poke"); void c.offsetWidth; c.classList.add("poke"); sfx.tap(); buzz(6); }; tilt(mc, c); }
   root.querySelectorAll("[data-fx]").forEach(b => b.onclick = () => handleFx(effects.find(e => e.id === b.dataset.fx), b.dataset.fk));
+  root.querySelectorAll("[data-fxshow]").forEach(b => b.onclick = () => import("../lib/ooc.js").then(m => m.ceremony(effects.find(e => e.id === b.dataset.fxshow))));
   bind(root, { activate: () => startActivate(mine.card) });
 }
 function tilt(wrap, card) {
@@ -120,7 +134,9 @@ async function doDraw(el) {
 }
 
 /* ---------- activation engine ---------- */
-const T = () => today();
+/* the day skills act on: today during the trip; before/after it (e.g. trying things out at home) the day open in 行程 */
+const T = () => { const d = today(), days = tripDays(); if (!days.length || days.includes(d)) return d; const s = getSelDate && getSelDate(); return s && days.includes(s) ? s : (d < days[0] ? days[0] : days[days.length - 1]); };
+const dayWord = () => T() === today() ? "今天" : `${shortDate(T())}（行程页选中的那天）`;
 function heroFx(cls) { const c = document.querySelector("#myCard .tc"); if (!c) return; c.classList.remove(cls); void c.offsetWidth; c.classList.add(cls); setTimeout(() => c.classList.remove(cls), 1300); }
 function optList(items, pick) { return `<div class="opts" role="radiogroup">${items.map(it => `<button class="opt${pick === it.id ? " on" : ""}" data-pick="${esc(it.id)}" role="radio" aria-checked="${pick === it.id}"${it.disabled ? " disabled" : ""}>${it.lead ? `<span class="k">${esc(it.lead)}</span>` : ""}<span>${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ""}</span></button>`).join("")}</div>`; }
 const row = (ok, dis) => `<div class="as-btns"><div class="row"><button class="btn" data-act="cancel">取消</button><button class="btn accent" data-act="confirm"${dis ? " disabled" : ""}>${ok}</button></div></div>`;
@@ -147,7 +163,7 @@ function startActivate(k, opt = {}) {
     bind(document.querySelector(".usheet"), { close: () => { closeSheet(); refresh(); } });
     if (opt.after) opt.after();
   };
-  const paint = (body, extra = {}) => { setSheet(body); const sh = document.querySelector(".usheet"); sh.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { v.pick = b.dataset.pick; sfx.tap(); flows[k](); }); const inp = sh.querySelector("[data-inp]"); if (inp) inp.oninput = () => { v.text = inp.value; const ok = sh.querySelector('[data-act="confirm"]'); if (ok) ok.disabled = !inp.value.trim(); }; bind(sh, { cancel: closeSheet, confirm: () => extra.apply && extra.apply(), addToday: () => { closeSheet(); openAdd(); }, ...extra }); };
+  const paint = (body, extra = {}) => { setSheet(body); const sh = document.querySelector(".usheet"); sh.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => { v.pick = b.dataset.pick; sfx.tap(); flows[k](); }); const inp = sh.querySelector("[data-inp]"); if (inp) inp.oninput = () => { v.text = inp.value; const ok = sh.querySelector('[data-act="confirm"]'); if (ok) ok.disabled = !inp.value.trim(); }; bind(sh, { cancel: closeSheet, confirm: () => extra.apply && extra.apply(), addToday: () => { closeSheet(); openAdd({ date: T() }); }, ...extra }); };
   const todays = () => dayActs(T()).filter(usable);
   const intro = `<div class="skd-sec"><small>ACTIVATE THIS SKILL? · 确认发动</small><p><b>${s.name}</b>　${s.effect}${srcKey === "K" && k !== "K" ? "<br><span class='as-hint'>由 K · 镜界 复制发动</span>" : ""}</p></div>`;
   if (isMinor(k)) {
@@ -163,14 +179,19 @@ function startActivate(k, opt = {}) {
   const flows = {
     "7"() {
       const st = dayActs(T()).filter(x => x.status !== "removed" && x.status !== "skipped" && !x.is_main && !["transit", "lodging", "flight"].includes(x.kind));
-      if (!st.length) return paint(`${sheetHead("7")}${intro}${emptyBox("今天没有可以射掉的行程（主要行程、交通和住宿射不掉）。")}</div>`);
-      paint(`${sheetHead("7")}${intro}<div class="skd-sec"><small>SHOOT THE SUN</small><p>选一项，它今天就没了。全队会收到通知。</p></div>${optList(st.map(x => ({ id: x.id, lead: x.time, label: x.title })), v.pick)}${row("射掉这一项", !v.pick)}</div>`, { apply: async () => {
-        const a = st.find(x => x.id === v.pick); try { await api.updateActivity(a.id, { status: "removed" }); } catch (e) {}
+      const locked = dayActs(T()).filter(x => x.status !== "removed" && x.status !== "skipped" && (x.is_main || ["lodging", "flight"].includes(x.kind)));
+      if (!st.length) return paint(`${sheetHead("7")}${intro}${emptyBox(`${dayWord()}没有可以射掉的行程。${locked.length ? `<br>${locked.map(x => "「" + esc(x.title) + "」").join("")}是主要行程 / 住宿，射不掉——在行程里点它，取消「主要行程」就可以。` : "<br>先在行程里加一个地点吧。"}`, ["addToday", "加一个地点"])}</div>`);
+      paint(`${sheetHead("7")}${intro}<div class="skd-sec"><small>SHOOT THE SUN · ${esc(dayWord())}</small><p>选一项，它就没了。全队会收到通知。</p></div>${optList(st.map(x => ({ id: x.id, lead: x.time, label: x.title })), v.pick)}${row("射掉这一项", !v.pick)}</div>`, { apply: async () => {
+        const a = st.find(x => x.id === v.pick); try { await api.updateActivity(a.id, { status: "removed" }); } catch (e) { toast("没能射掉，请检查网络再试一次"); return; }
         done({ activity: a.id, text: `射掉了「${a.title}」` }, `射掉「${a.title}」`, `<p style="text-align:center">「${esc(a.title)}」今天不去了。</p>`); } });
     },
     "6"() {
       paint(`${sheetHead("6")}${intro}<div class="skd-sec"><small>CALL THE RAIN</small><p>不改任何行程。今天整个房间的 App 会下雨，日历卡变成雨天，大家的手机会打一声雷。</p></div>${row("催雨")}</div>`, { apply: () => {
         done({ atmos: "rain", text: "今天全房间下雨" }, "催雨", `<p style="text-align:center">雨来了。</p>`); setTimeout(() => import("../lib/atmos.js").then(m => m.refresh()), 400); } });
+    },
+    "5"() {
+      paint(`${sheetHead("5")}${intro}<div class="skd-sec"><small>CALL THE SNOW</small><p>不改任何行程。今天整个房间的 App 会下雪，日历卡变成雪天，大家的手机会轻轻震一下。</p></div>${row("落雪")}</div>`, { apply: () => {
+        done({ atmos: "snow", text: "今天全房间下雪" }, "落雪", `<p style="text-align:center">雪落下来了。</p>`); setTimeout(() => import("../lib/atmos.js").then(m => m.refresh()), 400); } });
     },
     "4"() {
       paint(`${sheetHead("4")}${intro}<div class="skd-sec"><small>BORROW THE ROAD</small><p>发动后，今天任何一次打卡面板里会多一个「土地公担保」按钮：不用拍照、不用旅伴确认，直接盖章。只能用一次。</p></div>${row("请土地公担保")}</div>`, { apply: () => {
@@ -185,7 +206,7 @@ function startActivate(k, opt = {}) {
     K() { paint(`${sheetHead("K", "选一张技能复制，马上用它的效果（只能复制 1 次）。")}${optList(SKILLS.filter(x => x.key !== "K").map(x => ({ id: x.key, lead: x.key, label: x.name, sub: x.effect })), v.pick)}${row("复制这张", !v.pick)}</div>`, { apply: () => { sfx.mirror(); heroFx("mirroring"); closeSheet(); setTimeout(() => startActivate(v.pick, { src: "K" }), 380); } }); },
     Q() {
       const st = todays();
-      if (!st.length) return paint(`${sheetHead("Q")}${intro}${emptyBox("今天没有可以用技能的行程。<br>（主要行程、交通和住宿不能用技能）", ["addToday", "加一个地点"])}</div>`);
+      if (!st.length) return paint(`${sheetHead("Q")}${intro}${emptyBox(`${dayWord()}没有可以用技能的行程。<br>（主要行程、交通和住宿不能用技能）`, ["addToday", "加一个地点"])}</div>`);
       let prev = "";
       if (v.pick) { const p = st.find(x => x.id === v.pick), later = dayActs(T()).filter(x => x.status !== "removed" && x.status !== "skipped" && toMin(x.time) > toMin(p.time));
         prev = `<div class="skd-sec"><small>CHANGES · 会发生的变化</small><ul class="chg"><li><span>${esc(p.title)}</span><span>+1 hour</span></li>${later.map(x => `<li><span>${esc(x.title)}${x.is_main ? " 🔒" : ""}</span><span><s>${x.time}</s> → ${fmtMin(toMin(x.time) + 60)}</span></li>`).join("") || `<li><span>之后没有别的安排</span></li>`}</ul></div>`; }
@@ -226,8 +247,17 @@ function startActivate(k, opt = {}) {
 }
 
 /* ---------- effects today ---------- */
-function handleFx(e, kind) {
+export function handleFx(e, kind) {
   if (!e) return;
+  if (kind === "7") { const st = dayActs(T()).filter(usable); if (!st.length) { api.resolveEffect(e.id, "今天没有可以射掉的行程，后羿收起了弓").catch(() => {}); toast("今天没有可以射掉的行程，后羿收起了弓"); return; }
+    const a = st[Math.floor(Math.random() * st.length)]; sfx.chaos();
+    const sh = openSheet(`${sheetHead("7", "失控：后羿闭着眼睛射了一箭")}<div class="ooc-shot"><svg viewBox="0 0 200 110" aria-hidden="true"><circle class="os-sun" cx="150" cy="30" r="16"/><path class="os-arrow" d="M10 100L140 38" /><path class="os-tip" d="M140 38l-9 1 4 7z"/></svg><p>射中了——</p><b>${esc(a.time)} ${esc(a.title)}</b></div>${row("好吧，就它了")}</div>`, { accent: CARD["7"].accent });
+    bind(sh, { cancel: () => { closeSheet(); }, confirm: async () => { try { await api.updateActivity(a.id, { status: "removed" }); await api.resolveEffect(e.id, `射掉：${a.title}`); await api.addLog(T(), "7", "EFFECT", `后羿失控，射掉了「${a.title}」`); closeSheet(); toast(`「${a.title}」被射下来了`); } catch (er) { toast("没能保存"); } } });
+    sh.querySelector('[data-act="cancel"]').textContent = "等一下再说"; return; }
+  if (kind === "Q") { const st = dayActs(T()).filter(x => x.status !== "removed" && x.status !== "skipped" && x.status !== "done");
+    if (!st.length) { api.resolveEffect(e.id, "今天还没有行程，太阳晚一点也没关系").catch(() => {}); toast("今天还没有行程"); return; }
+    Promise.all(st.map(x => api.updateActivity(x.id, { was_time: x.was_time || x.time, time: fmtMin(toMin(x.time) + 30) }))).then(() => { api.resolveEffect(e.id, `${st.length} 项全部推迟 30 分钟`); api.addLog(T(), "Q", "EFFECT", "羲和失控：今天所有行程推迟 30 分钟"); sfx.chaos(); toast("今天的行程都往后推了 30 分钟"); }).catch(() => toast("没能保存")); return; }
+  if (kind === "redo") { startActivate(e.card, { mode: "effect", onDone: () => api.resolveEffect(e.id, "已补做") }); return; }
   if (kind === "ok") { api.resolveEffect(e.id, e.detail || "").catch(() => {}); sfx.tap(); return; }
   if (kind === "9") { openSpecial({ date: T(), title: "传送门（失控）：新增一个原本没计划的地点", onDone: () => { api.resolveEffect(e.id, "已新增计划外地点"); api.addLog(T(), "9", "EFFECT", "新增了一个计划外地点"); } }); return; }
   if (kind === "K") { const k = (e.detail.match(/自动生效：(\w+)/) || [])[1]; if (!CARD[k]) return; startActivate(k, { mode: "effect", src: "K", onDone: () => api.resolveEffect(e.id, `已执行 ${k} · ${CARD[k].name}`) }); return; }

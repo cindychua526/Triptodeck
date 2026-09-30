@@ -1,14 +1,15 @@
 import { api, on, nameOf } from "../lib/api.js";
 import { ic } from "../lib/icons.js";
 import { $, esc, seeded, shrinkImage, dataUrlToBlob, wait, buzz, today, fmtMin, shortDate } from "../lib/util.js";
-import { openSheet, setSheet, closeSheet, toast, bind, lockSheet } from "../lib/ui.js";
+import { openSheet, setSheet, closeSheet, toast, bind, lockSheet, sheetOpen } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
 import { missionFor as pickMission, missionIcon } from "../data/missions.js";
 import { hash } from "../lib/util.js";
 import { placeStampSVG, flyToTab, myStamps } from "./collection.js";
 import { waxSeal } from "../data/stamps.js";
 import { onNotifyAction } from "../lib/notify.js";
-import { tripCityNames } from "./trip.js";
+import { tripCityNames, durPicker, wireDur } from "./trip.js";
+import { greyDay, greySvg, GREY_NOTE } from "../lib/grey.js";
 
 const short = n => n.replace(/（.*?）|\(.*?\)/g, "").replace(/ · .*/, "").trim();
 const rerollKey = (d, n) => `td-reroll:${d}:${n}`;
@@ -31,8 +32,8 @@ export function openCheckin(o) {
   let m = o.mission ? { ...o.mission, rr: 1, fixed: true } : missionFor(o.name, o.city, date, o.parent, o.activityKind), photo = null;
   const already = myStamps().some(s => s.date === date && s.name === o.name);
   let tudi = false; api.myDraw(date).then(d => { tudi = !!(d && d.card === "4" && d.status === "activated" && !localStorage.getItem("td-tudi-" + date)); if (tudi && document.querySelector(".usheet [data-act=shoot]") && !document.querySelector(".usheet [data-act=tudi]")) intro(); }).catch(() => {});
-  const exp = o.kind === "experience", stampPreview = () => exp ? waxSeal(o.name, o.city, date) : placeStampSVG(o.name, o.city, date, special);
-  const head = () => `<div class="ci-head"><div class="ci-ghost">${stampPreview()}</div><div><small class="as-k">${esc(o.city || "")}${o.parent ? " · " + esc(o.parent) : ""}${special ? " · ✦计划外" : ""}</small><h3>${esc(o.name)}</h3></div></div>`;
+  const exp = o.kind === "experience", grey = greyDay(date), stampPreview = () => { const svg = exp ? waxSeal(o.name, o.city, date) : placeStampSVG(o.name, o.city, date, special); return grey ? greySvg(svg) : svg; };
+  const head = () => `<div class="ci-head"><div class="ci-ghost">${stampPreview()}</div><div><small class="as-k">${esc(o.city || "")}${o.parent ? " · " + esc(o.parent) : ""}${special ? " · ✦计划外" : ""}</small><h3>${esc(o.name)}</h3>${grey ? `<p class="ci-grey">🪨 ${GREY_NOTE}</p>` : ""}</div></div>`;
   const input = `<input type="file" accept="image/*" capture="environment" id="ciFile" hidden>`;
   const intro = () => setSheet(`<div class="as">${head()}
     ${already ? `<p class="as-hint">你今天已经在这里盖过章了，再打一次会多一枚。</p>` : ""}
@@ -46,7 +47,8 @@ export function openCheckin(o) {
   const sent = () => { setSheet(`<div class="as">${head()}<div class="kapok-send"><svg viewBox="0 0 200 190" class="kapok"><g class="kp-flower"><path d="M100 60C88 40 70 20 52 30C66 38 80 50 92 66Z" fill="#b8282a"/><path d="M100 60C112 40 130 20 148 30C134 38 120 50 108 66Z" fill="#b8282a"/><path d="M100 64C80 60 56 64 44 80C62 78 80 74 96 72Z" fill="#7a1418"/><path d="M100 64C120 60 144 64 156 80C138 78 120 74 104 72Z" fill="#7a1418"/><path d="M92 20Q100 10 108 20L106 72Q100 78 94 72Z" fill="#d8342e"/><path d="M96 70l4 8 4-8z" fill="#f3e0b0"/></g><g class="kp-threads" stroke="#2a2a30" stroke-width=".6" fill="none">${[70, 80, 90, 100, 110, 120, 130].map((x, i) => `<path d="M100 76Q${x} 110 ${x - 4 + (i % 2) * 8} 140"/>`).join("")}</g><g class="kp-notes">${[0, 1, 2, 3].map(i => `<g transform="translate(${62 + i * 18} ${134 + (i % 2) * 8}) rotate(${-8 + i * 6})"><rect width="30" height="38" fill="#f3e6c4" stroke="#c8b890" stroke-width=".6"/>${[6, 11, 16, 21, 26].map(y => `<path d="M${4 + (y % 3)} ${y}h20" stroke="#8a7a60" stroke-width=".6"/>`).join("")}</g>`).join("")}</g></svg><img src="${photo}" alt="" class="kp-photo"></div>
       <div class="ci-verdict ok"><b>已经交给旅伴</b><p>${esc(buddies().map(x => x.name).join("、"))} 任何一位确认后，印章就会盖进你的手账。</p></div>
       <div class="as-btns"><button class="btn ink full" data-act="close">好的</button></div></div>`); wire(); sfx.paper(); };
-  const stamped = () => { setSheet(`<div class="as">${head()}<div class="polaroid passed" id="ciPol"><img src="${photo}" alt=""><div class="pol-stamp on">${stampPreview()}</div></div>
+  const surprise = () => { let n = 0; try { n = +localStorage.getItem("td-stamp-n") || 0; localStorage.setItem("td-stamp-n", String(n + 1)); } catch (e) {} if (n === 2 || (n > 2 && Math.random() < .18)) { let k = 0; const tick = () => { k++; if (k > 40) return; if (sheetOpen() || document.querySelector(".mo")) return setTimeout(tick, 500); import("../lib/motion.js").then(m => m.playMotion(Math.random() < .5 ? "lantern" : "qian")); }; setTimeout(tick, 1400); } };
+  const stamped = () => { surprise(); setSheet(`<div class="as">${head()}<div class="polaroid passed" id="ciPol"><img src="${photo}" alt=""><div class="pol-stamp on">${stampPreview()}</div></div>
       <div class="ci-verdict ok"><b>✓ 打卡成功</b><p>印章已经盖进手账</p></div><div class="as-btns"><button class="btn ink full" data-act="close">好的</button></div></div>`); wire(); sfx.stamp(); sfx.success(); buzz([20, 40, 20]); };
   async function tudiSubmit() {
     lockSheet(true);
@@ -61,7 +63,7 @@ export function openCheckin(o) {
     try { const small = api.mode === "local" ? await shrinkImage(dataUrlToBlob(photo), 520, .7) : photo; path = await api.uploadCheckinPhoto(dataUrlToBlob(small), small); } catch (e) { lockSheet(false); return toast("照片没能上传，请检查网络"); }
     try {
       const r = await api.submitCheckin({ kind: exp ? "experience" : special ? "special" : "place", name: o.name, city: o.city, date, mission: m.text, photo_path: path, activity_id: o.activityId || null });
-      if (special && o.addToPlan) { const d = new Date(); api.addActivity({ date, time: fmtMin(d.getHours() * 60 + d.getMinutes()), title: o.name, city: o.city, kind: "sight", dur: 60, source: "special" }).catch(() => {}); }
+      if (special && o.addToPlan) { const d = new Date(); api.addActivity({ date, time: o.time || fmtMin(d.getHours() * 60 + d.getMinutes()), title: o.name, city: o.city, kind: "sight", dur: o.dur || 60, source: "special" }).catch(() => {}); }
       lockSheet(false);
       if (r.status === "approved" || !needsBuddy()) { stamped(); const el = document.querySelector(".pol-stamp"); if (el) setTimeout(() => flyToTab(stampPreview(), el.getBoundingClientRect()), 700); o.onDone && o.onDone({ approved: true }); }
       else { sent(); o.onDone && o.onDone({ pending: true }); }
@@ -90,10 +92,12 @@ export function openSpecial({ date, city, onDone, title } = {}) {
       <p class="as-hint" style="margin-top:0">写下这个地方，完成拍照任务、旅伴确认后，就能拿到一枚「奇遇」星形印章。</p>
       <input class="inp" id="spN" maxlength="30" placeholder="地方的名字，比如：巷子里的老茶馆" autofocus>
       <div class="chips-wrap" style="margin-top:10px">${cities.map(x => `<button class="chip sm${x === c ? " on" : ""}" data-c="${x}" style="--c:#3a2c1f">${x}</button>`).join("")}</div>
-      <label class="tog"><input type="checkbox" id="spAdd" ${add ? "checked" : ""}> 同时加入今天的行程（大家都看得到）</label>
+      <label class="tog"><input type="checkbox" id="spAdd" ${add ? "checked" : ""}> 同时加入这一天的行程（大家都看得到）</label>
+      <div id="spWhen"><label class="lbl">几点到的<input class="inp" type="time" id="spT" value="${fmtMin(new Date().getHours() * 60 + new Date().getMinutes())}"></label>${durPicker("spDur", 60)}</div>
       <div class="as-btns"><button class="btn ink full" data-act="go">去打卡</button></div></div>`, { accent: "#3a2c1f" });
     sh.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { c = b.dataset.c; sh.querySelectorAll("[data-c]").forEach(x => x.classList.toggle("on", x === b)); });
-    bind(sh, { go: () => { const n = $("spN").value.trim(); if (!n) return toast("先写下地方的名字"); add = $("spAdd").checked; openCheckin({ name: n, city: c, date, kind: "special", addToPlan: add, onDone }); } });
+    const getDur = wireDur(sh, "spDur"), when = $("spWhen"), tog = () => { when.style.display = $("spAdd").checked ? "" : "none"; }; $("spAdd").onchange = tog; tog();
+    bind(sh, { go: () => { const n = $("spN").value.trim(); if (!n) return toast("先写下地方的名字"); add = $("spAdd").checked; const t = $("spT").value; openCheckin({ name: n, city: c, date, kind: "special", addToPlan: add, time: /^\d{1,2}:\d{2}$/.test(t) ? t.padStart(5, "0") : null, dur: getDur(), onDone }); } });
   };
   draw();
 }

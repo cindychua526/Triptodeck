@@ -18,15 +18,19 @@ export const ATMOS = {
 let current = null, canvas = null, raf = 0, parts = [];
 export function scheduled(date = today()) {
   const t = api.trip; if (!t) return null; const days = tripDays(); if (days.length < 3) return date === days[days.length - 1] ? "fire" : null;
+  if (days.length === 3) return date === days[2] ? "fire" : date === days[1] ? ["snow", "dusk", "night"][hash(t.id + "atmos") % 3] : null;
   if (date === days[days.length - 1]) return "fire";
   const mid = days.slice(1, -1), h = hash(t.id + "atmos"), pool = ["snow", "dusk", "night"];
   const pick = new Set(); if (mid.length >= 2) { const a = h % mid.length; let b = (h >>> 5) % mid.length; if (b === a) b = (a + 1 + ((h >>> 11) % (mid.length - 1))) % mid.length; pick.add(mid[a]); pick.add(mid[b]); }
   const arr = [...pick]; const i = arr.indexOf(date); if (i < 0) return null; const first = (h >>> 9) % pool.length; return pool[(first + i * (1 + ((h >>> 13) % 2))) % pool.length];
 }
 export async function todaysAtmos() {
-  const d = today(); let rain = false;
-  try { rain = (await api.deckTable(d)).some(x => x.card === "6" && x.status === "activated"); } catch (e) {}
-  return rain ? "rain" : scheduled(d);
+  const d = today(); let fx = null;
+  /* the card itself, or K 镜界 / X 无常 copying it (copied, or activation.as) */
+  const as = x => x.status === "activated" ? [x.card, x.copied, x.activation && x.activation.as, x.activation && x.activation.atmos === "rain" ? "6" : null, x.activation && x.activation.atmos === "snow" ? "5" : null] : [];
+  try { const T = await api.deckTable(d); const ks = T.flatMap(as); fx = ks.includes("6") ? "rain" : ks.includes("5") ? "snow" : null; } catch (e) {}
+  if (!fx) { try { const E = (await api.effects()).filter(e => e.target_date === d && e.source === "unexecuted"); if (E.some(e => e.card === "6") && new Date().getHours() < 12) fx = "rain"; else if (E.some(e => e.card === "5")) fx = "snow"; } catch (e) {} }
+  return fx || scheduled(d);
 }
 export function current_() { return current; }
 export async function refresh() { const a = api.trip ? await todaysAtmos() : null; apply(a); }
@@ -35,6 +39,7 @@ function apply(a) {
   document.body.classList.remove("atm-rain", "atm-snow", "atm-dusk", "atm-night", "atm-fire"); if (a) document.body.classList.add("atm-" + a);
   stop(); if (a === "rain" || a === "snow") start(a);
   if (a === "rain") { setTimeout(() => { buzz([40, 60, 80]); mus.whoosh(); }, 300); }
+  if (a === "snow") { setTimeout(() => { buzz([8, 60, 8]); try { mus.chime(6, .02); mus.chime(9, .015, .2); } catch (e) {} }, 300); }
   document.dispatchEvent(new CustomEvent("atmos", { detail: a }));
 }
 function start(kind) {
@@ -56,5 +61,5 @@ export function celebrate() {
   mus.pop(); setTimeout(() => mus.harp(4, 5, .05), 120); buzz([10, 30, 10]);
   let n = 0; const loop = () => { n++; x.clearRect(0, 0, c.width, c.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += .04; p.l -= .014; x.globalAlpha = Math.max(0, p.l); x.fillStyle = p.c; x.beginPath(); x.arc(p.x, p.y, 2.2, 0, 7); x.fill(); }); if (n < 80) requestAnimationFrame(loop); else c.remove(); }; requestAnimationFrame(loop);
 }
-on("trip", () => setTimeout(refresh, 300)); on("skill_log", refresh); on("skill_draws", refresh);
+on("trip", () => setTimeout(refresh, 300)); on("skill_log", refresh); on("skill_draws", refresh); on("skill_effects", refresh);
 if (typeof window !== "undefined") { window.tdCelebrate = celebrate; setTimeout(refresh, 800); setInterval(refresh, 60000); }

@@ -77,6 +77,70 @@ const PIECES = {
       if (pass) { const cols = ["#6fe0f0", "#f06aa8", "#f0b04a", "#8aa8ff", "#ffffff", "#5fd0c8"]; for (let i = 0; i < 18; i++) { const a = -1.1 + i / 17 * 1.5, L = w * (.5 + (i % 3) * .12) * Math.min(1, (k - .55) * 2.4); x.strokeStyle = cols[i % 6]; x.globalAlpha = .75; x.lineWidth = .9; x.beginPath(); x.moveTo(ex + 6, ey - 12); x.quadraticCurveTo(ex + 6 + Math.cos(a) * L * .5, ey - 12 + Math.sin(a) * L * .45, ex + 6 + Math.cos(a) * L, ey - 12 + Math.sin(a) * L); x.stroke(); } x.globalAlpha = 1;
         star4(x, w * .77, h * .3, 5, (k - .55) * 2); star4(x, w * .68, h * .6, 3, (k - .55) * 2); }
     } },
+  /* 工夫茶 — 关公巡城：一只杯一只杯轮着倒，倒满三杯请大家喝 */
+  tea: { bg: "#efe3cc", caption: () => T("关公巡城，韩信点兵。\n三杯倒满，请喝茶。", "Round the cups, drop by drop.\nThree full cups — have some tea."), hint: () => T("点一下，倒一轮茶", "Tap to pour a round"),
+    init(s) { s.fill = [0, 0, 0]; s.n = 0; s.pour = 0; s.tgt = 0; s.done = 0; s.steam = []; },
+    tap(s) { if (s.done) { s.fill = [0, 0, 0]; s.n = 0; s.done = 0; mus.clink(1); return; } s.tgt = s.n % 3; s.n++; s.pour = .7; mus.drip(3 + s.tgt); buzz(5); },
+    frame(s, x, w, h, t, dt) {
+      const cy = h * .66, cw = w * .14, gap = w * .22, cx0 = w / 2 - gap;
+      x.fillStyle = "#6b3a1e"; x.beginPath(); x.ellipse(w / 2, cy + cw * .55, w * .42, h * .06, 0, 0, 7); x.fill();
+      x.strokeStyle = "rgba(255,230,190,.35)"; x.lineWidth = 1; for (let i = -3; i <= 3; i++) { x.beginPath(); x.moveTo(w / 2 + i * w * .1, cy + cw * .2); x.lineTo(w / 2 + i * w * .11, cy + cw * .9); x.stroke(); }
+      s.fill.forEach((f, i) => { const cx = cx0 + i * gap; x.fillStyle = "#fbf8f1"; x.beginPath(); x.moveTo(cx - cw / 2, cy - cw * .45); x.lineTo(cx + cw / 2, cy - cw * .45); x.lineTo(cx + cw * .3, cy + cw * .35); x.lineTo(cx - cw * .3, cy + cw * .35); x.closePath(); x.fill(); x.strokeStyle = "#2a3a6a"; x.lineWidth = 1.2; x.stroke();
+        if (f > 0) { const top = cy + cw * .35 - (cw * .75) * Math.min(1, f); x.save(); x.beginPath(); x.moveTo(cx - cw / 2, cy - cw * .45); x.lineTo(cx + cw / 2, cy - cw * .45); x.lineTo(cx + cw * .3, cy + cw * .35); x.lineTo(cx - cw * .3, cy + cw * .35); x.closePath(); x.clip(); x.fillStyle = "#b9712a"; x.fillRect(cx - cw, top, cw * 2, cw * 2); x.restore(); }
+        x.strokeStyle = "#2a3a6a"; x.lineWidth = .8; x.beginPath(); x.moveTo(cx - cw * .2, cy - cw * .1); x.quadraticCurveTo(cx, cy - cw * .25, cx + cw * .2, cy - cw * .1); x.stroke();
+        if (f >= 1 && Math.random() < dt * 3) s.steam.push({ x: cx + rnd(-cw * .2, cw * .2), y: cy - cw * .5, a: 1, ph: rnd(0, 6) }); });
+      const tx = cx0 + s.tgt * gap, pot = s.pour > 0 ? 1 : 0, px = pot ? tx + w * .12 : w * .7, py = h * .3; s.px = (s.px ?? px) + (px - (s.px ?? px)) * Math.min(1, dt * 8);
+      x.save(); x.translate(s.px, py); x.rotate(pot ? -.55 : 0); x.fillStyle = "#8a4a2a"; x.beginPath(); x.ellipse(0, 0, w * .09, w * .075, 0, 0, 7); x.fill(); x.fillRect(-w * .03, -w * .1, w * .06, w * .03); x.beginPath(); x.moveTo(-w * .08, -w * .01); x.quadraticCurveTo(-w * .16, -w * .04, -w * .17, -w * .08); x.lineWidth = w * .02; x.strokeStyle = "#8a4a2a"; x.stroke(); x.beginPath(); x.arc(w * .1, 0, w * .04, -1.4, 1.4); x.lineWidth = w * .012; x.stroke(); x.restore();
+      if (s.pour > 0) { s.pour -= dt; s.fill[s.tgt] = Math.min(1, s.fill[s.tgt] + dt * .75); x.strokeStyle = "#b9712a"; x.lineWidth = 2.2; x.beginPath(); x.moveTo(s.px - w * .1, py - w * .05); x.quadraticCurveTo(tx - 4, py + (cy - py) * .3, tx, cy - cw * .45); x.stroke(); if (Math.random() < dt * 14) mus.drip(Math.floor(Math.random() * 3) + 4); }
+      if (!s.done && s.fill.every(f => f >= .99)) { s.done = 1; mus.harp(2, 6, .07); buzz([10, 40, 10]); }
+      s.steam = s.steam.filter(p => { p.y -= dt * 22; p.a -= dt * .45; x.strokeStyle = `rgba(120,90,60,${Math.max(0, p.a) * .5})`; x.lineWidth = 1.2; x.beginPath(); x.moveTo(p.x, p.y); x.quadraticCurveTo(p.x + Math.sin(t * 2 + p.ph) * 6, p.y - 8, p.x, p.y - 16); x.stroke(); return p.a > 0; });
+      if (s.done) { x.fillStyle = "#6b3a1e"; x.font = `600 ${w * .06}px "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(T("请喝茶", "Tea's ready"), w / 2, h * .47); x.font = `${w * .032}px "Special Elite", monospace`; x.fillText(T("再点一下，重新泡一泡", "tap again for a fresh brew"), w / 2, h * .51); x.textAlign = "left"; }
+    } },
+  /* 放河灯 — 点一下放一盏灯，许一个愿 */
+  lantern: { bg: "#10152a", dark: true, caption: () => T("把今天想说的，\n交给一盏灯。", "Give what you want to say today\nto a little lantern."), hint: () => T("点一下，放一盏灯", "Tap to let a lantern go"),
+    init(s, w, h) { s.L = []; s.st = Array.from({ length: 70 }, () => ({ x: Math.random() * w, y: Math.random() * h * .6, r: rnd(.4, 1.3), ph: rnd(0, 6) })); s.W = T("平安到家|下次还一起来|吃遍整条街|天气一直好|不迷路|拍到最美的一张|大家都不吵架|钱包还有钱|遇到好人|睡个好觉|明天也很开心|想念的人也好", "home safe|come back together|eat the whole street|good weather|never get lost|the best photo|no fights|money left|kind strangers|good sleep|happy tomorrow|love to those far away").split("|"); },
+    tap(s, px, py, w, h) { s.L.push({ x: px, y: h * .86, vx: rnd(-8, 8), ph: rnd(0, 6), w: s.W[Math.floor(Math.random() * s.W.length)], a: 0 }); mus.chime(Math.floor(Math.random() * 7), .025); buzz(6); if (s.L.length > 18) s.L.shift(); },
+    frame(s, x, w, h, t, dt) {
+      s.st.forEach(p => { x.fillStyle = `rgba(255,250,230,${.3 + Math.sin(t * 2 + p.ph) * .25})`; x.beginPath(); x.arc(p.x, p.y, p.r, 0, 7); x.fill(); });
+      x.fillStyle = "#1a2342"; x.fillRect(0, h * .8, w, h * .2); x.fillStyle = "#0a0e1c"; x.beginPath(); x.moveTo(0, h * .8); for (let X = 0; X <= w; X += w / 14) x.lineTo(X, h * .8 - (Math.sin(X * 1.7) * .5 + .5) * h * .05 - ((X / w * 14 | 0) % 3 ? 0 : h * .03)); x.lineTo(w, h * .8); x.fill();
+      s.L.forEach(l => { l.y -= dt * (26 + Math.sin(t + l.ph) * 6); l.x += (l.vx + Math.sin(t * .8 + l.ph) * 6) * dt; l.a = Math.min(1, l.a + dt);
+        const g = x.createRadialGradient(l.x, l.y, 0, l.x, l.y, 46); g.addColorStop(0, "rgba(255,190,90,.55)"); g.addColorStop(1, "rgba(255,190,90,0)"); x.fillStyle = g; x.beginPath(); x.arc(l.x, l.y, 46, 0, 7); x.fill();
+        x.fillStyle = "#f2a23a"; x.beginPath(); x.moveTo(l.x - 11, l.y - 14); x.lineTo(l.x + 11, l.y - 14); x.lineTo(l.x + 8, l.y + 12); x.lineTo(l.x - 8, l.y + 12); x.closePath(); x.fill(); x.fillStyle = "#ffe7a8"; x.fillRect(l.x - 3, l.y - 2, 6, 10);
+        x.fillStyle = "rgba(255,225,170,.35)"; x.beginPath(); x.ellipse(l.x, h * .8 + (h * .8 - l.y) * .06, 6, 2, 0, 0, 7); x.fill();
+        if (l.y > h * .35) { x.fillStyle = `rgba(255,236,200,${Math.min(1, l.a) * (l.y - h * .35) / (h * .5)})`; x.font = `${w * .034}px "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(l.w, l.x, l.y + 30); x.textAlign = "left"; } });
+      s.L = s.L.filter(l => l.y > -40);
+    } },
+  /* 仙女棒 — 用手指在夜里写一个字 */
+  sparkler: { bg: "#0b0912", dark: true, caption: () => T("用仙女棒写一个字，\n留给今天。", "Write one word with a sparkler,\nleave it to today."), hint: () => T("按住拖动，写一个字", "Hold and drag to write"),
+    init(s) { s.tr = []; s.sp = []; s.down = false; },
+    tap(s, px, py) { s.down = true; s.lx = px; s.ly = py; mus.fizz(.3); },
+    move(s, px, py) { if (!s.down) return; s.tr.push({ x: px, y: py, a: 1, x0: s.lx, y0: s.ly }); s.lx = px; s.ly = py; for (let i = 0; i < 4; i++) { const a = rnd(0, 6.28), v = rnd(40, 160); s.sp.push({ x: px, y: py, vx: Math.cos(a) * v, vy: Math.sin(a) * v, l: rnd(.3, .7), c: Math.random() < .5 ? "#ffe9a8" : "#fff" }); } if (Math.random() < .25) mus.fizz(.12); },
+    up(s) { s.down = false; },
+    frame(s, x, w, h, t, dt) {
+      x.lineCap = "round"; s.tr.forEach(p => { p.a -= dt * .08; x.strokeStyle = `rgba(255,214,140,${Math.max(0, p.a)})`; x.shadowColor = "rgba(255,190,90,.9)"; x.shadowBlur = 10; x.lineWidth = 3; x.beginPath(); x.moveTo(p.x0, p.y0); x.lineTo(p.x, p.y); x.stroke(); }); x.shadowBlur = 0;
+      s.tr = s.tr.filter(p => p.a > 0);
+      s.sp = s.sp.filter(p => { p.l -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 120 * dt; x.fillStyle = p.c; x.globalAlpha = Math.max(0, p.l * 1.6); x.fillRect(p.x, p.y, 1.6, 1.6); x.globalAlpha = 1; return p.l > 0; });
+      if (s.down && s.lx != null) { const g = x.createRadialGradient(s.lx, s.ly, 0, s.lx, s.ly, 22); g.addColorStop(0, "rgba(255,255,230,.95)"); g.addColorStop(1, "rgba(255,200,120,0)"); x.fillStyle = g; x.beginPath(); x.arc(s.lx, s.ly, 22, 0, 7); x.fill(); }
+      if (!s.tr.length && !s.down) { x.fillStyle = "rgba(255,236,200,.18)"; x.font = `${w * .2}px "Long Cang", "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(T("好", "hi"), w / 2, h * .56); x.textAlign = "left"; }
+    } },
+  /* 求签 — 摇三下签筒，掉出一支旅行签 */
+  qian: { bg: "#a8321f", dark: true, caption: () => T("心里想着接下来的旅程，\n摇一摇签筒。", "Think of the road ahead\nand shake the tube."), hint: () => T("点三下，摇签筒", "Tap three times to shake"),
+    init(s) { s.sh = 0; s.wob = 0; s.out = null; s.k = 0;
+      s.Q = T("上上|风过桥头，灯亮一半。慢慢走，好吃的在下一个路口。;上吉|今日宜迷路。转错的那条巷子，会有你最喜欢的一张照片。;中吉|钱包会瘦一点，笑会多一点。点那道没吃过的。;大吉|同行的人今天特别可爱，记得夸一句。;上吉|雨来不必躲，屋檐下正好喝一杯茶。;中平|今天适合坐下来，什么也不做，看路人十五分钟。;上上|老店的阿姨会多给你一勺。说谢谢要大声。;吉|别赶。错过的那班车，是留给你看日落的。;上吉|吃第二碗之前，先拍第一碗。;大吉|今天抽到的技能牌，发动了会有好事。;中吉|问一位本地人，照着他说的走，一定不亏。;上上|回头看一眼走过的路，这一趟你已经赚到了。", "Best|Wind on the bridge, lamps half lit. The good food is at the next corner.;Great|Get lost today — the wrong alley holds your favourite photo.;Good|The wallet gets thinner, the smiles get wider. Order the dish you've never had.;Great|Your travel buddies are extra lovely today. Tell one of them.;Great|Don't run from the rain — have tea under the eaves.;Fair|Sit down and watch people for fifteen minutes.;Best|The old auntie will give you an extra spoon. Thank her loudly.;Good|The bus you missed was waiting to show you the sunset.;Great|Photo the first bowl before the second.;Great|Activate today's skill card — something good follows.;Good|Ask a local and follow their advice.;Best|Look back once — this trip has already paid off.").split(";").map(q => q.split("|")); },
+    tap(s) { if (s.out) { s.init2 = 1; s.out = null; s.sh = 0; s.k = 0; return; } s.sh++; s.wob = 1; sfx.shuffle(); buzz(12); if (s.sh >= 3) { const i = Math.floor(Math.random() * s.Q.length); s.out = { no: i + 1 + (Math.floor(Math.random() * 8) * 12), lv: s.Q[i][0], txt: s.Q[i][1] }; s.k = 0; setTimeout(() => { sfx.flip(); mus.harp(3, 5, .06); }, 500); } },
+    frame(s, x, w, h, t, dt) {
+      s.wob = Math.max(0, s.wob - dt * 2.4); const r = Math.sin(t * 30) * .18 * s.wob, cx = w / 2, by = h * .74, tw = w * .26, th = h * .28;
+      x.save(); x.translate(cx, by); x.rotate(r);
+      for (let i = 0; i < 9; i++) { x.fillStyle = i % 3 ? "#e8c77a" : "#d4a85a"; x.fillRect(-tw * .38 + i * tw * .09, -th - h * .06 - (i % 4) * 8, tw * .05, h * .1); }
+      x.fillStyle = "#6b2a16"; x.fillRect(-tw / 2, -th, tw, th); x.fillStyle = "#8a3a1e"; x.fillRect(-tw / 2, -th, tw * .18, th); x.fillStyle = "#e8c77a"; x.fillRect(-tw / 2, -th * .72, tw, 3); x.fillRect(-tw / 2, -th * .22, tw, 3);
+      x.fillStyle = "#f3dfb0"; x.font = `600 ${w * .07}px "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(T("签", "签"), 0, -th * .4); x.restore();
+      if (s.out) { s.k = Math.min(1, s.k + dt * 1.6); const e = 1 - Math.pow(1 - s.k, 3), sx = cx, sy = by - th - h * .08 - e * h * .04;
+        x.save(); x.translate(sx, sy); x.rotate(-.2 + e * .2); x.fillStyle = "#f1d58e"; x.fillRect(-w * .03, -h * .08, w * .06, h * .16); x.fillStyle = "#b3341e"; x.font = `600 ${w * .03}px "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(T("第", "No"), 0, -h * .045); x.fillText(String(s.out.no), 0, -h * .015); x.fillText(s.out.lv[0] || "", 0, h * .02); x.fillText(s.out.lv[1] || "", 0, h * .05); x.restore();
+        if (s.k >= 1) { const bx = w * .08, bw = w * .84, byy = h * .09; x.fillStyle = "rgba(251,243,227,.95)"; x.fillRect(bx, byy, bw, h * .17); x.strokeStyle = "#b3341e"; x.lineWidth = 1; x.strokeRect(bx + 5, byy + 5, bw - 10, h * .17 - 10);
+          x.fillStyle = "#b3341e"; x.font = `600 ${w * .045}px "Noto Serif SC", serif`; x.textAlign = "center"; x.fillText(T(`第 ${s.out.no} 签 · ${s.out.lv}`, `No. ${s.out.no} · ${s.out.lv}`), w / 2, byy + h * .05);
+          x.fillStyle = "#3a2c1f"; x.font = `${w * .036}px "Noto Serif SC", serif`; const words = s.out.txt, lines = []; let ln = ""; for (const ch of (/[a-z]/i.test(words) ? words.split(" ").map(q => q + " ") : words.split(""))) { if (x.measureText(ln + ch).width > bw - 36) { lines.push(ln); ln = ch; } else ln += ch; } lines.push(ln); lines.slice(0, 4).forEach((l, i) => x.fillText(l.trim(), w / 2, byy + h * .09 + i * w * .05)); x.textAlign = "left"; } }
+      else { x.fillStyle = "rgba(251,243,227,.8)"; x.font = `${w * .04}px "Special Elite", monospace`; x.textAlign = "center"; x.fillText("● ".repeat(s.sh) + "○ ".repeat(3 - s.sh), w / 2, h * .9); x.textAlign = "left"; }
+    } },
   /* 庄周梦蝶 — cracks and butterflies */
   dream: { bg: "#e6e8e8", caption: () => T("不知周之梦为胡蝶与，\n胡蝶之梦为周与。", "Was it Zhou dreaming of a butterfly,\nor a butterfly dreaming of Zhou?"), auto: 5200,
     init(s, w, h) { s.k = 0; const cr = []; const grow = (x0, y0, a, len, d) => { if (d > 3) return; let px = x0, py = y0; const seg = []; for (let i = 0; i < len; i++) { a += rnd(-.5, .5); px += Math.cos(a) * 9; py += Math.sin(a) * 9; seg.push([px, py]); } cr.push(seg); if (Math.random() < .8) grow(px, py, a + rnd(-1, 1), len * .6, d + 1); if (Math.random() < .5) grow(px, py, a + rnd(-1.4, 1.4), len * .5, d + 1); };
@@ -101,13 +165,16 @@ export function playMotion(kind, o = {}) {
   let w, h; const size = () => { w = ov.clientWidth; h = ov.clientHeight; cv.width = w * dpr; cv.height = h * dpr; x.setTransform(dpr, 0, 0, dpr, 0, 0); }; size(); P.init && P.init(s, w, h);
   const cap = ov.querySelector(".mo-cap"), full = P.caption(o); let ci = 0; const type = setInterval(() => { ci++; cap.textContent = full.slice(0, ci); if (ci % 2) sfx.tap && ci < full.length && Math.random() < .5 && sfx.tap(); if (ci >= full.length) clearInterval(type); }, 70);
   let run = true, last = performance.now(), t = 0;
-  const loop = now => { if (!run) return; const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; x.fillStyle = P.bg; x.fillRect(0, 0, w, h); P.frame(s, x, w, h, t, REDUCE ? 0 : dt); x.globalAlpha = 1; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
+  const loop = now => { if (!run) return; const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; x.globalAlpha = 1; x.shadowBlur = 0; x.fillStyle = P.bg; x.fillRect(0, 0, w, h); P.frame(s, x, w, h, t, REDUCE ? 0 : dt); x.globalAlpha = 1; requestAnimationFrame(loop); }; requestAnimationFrame(loop);
   cv.addEventListener("pointerdown", e => { const r = cv.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top; if (kind === "rain") s.hold = true; P.tap && P.tap(s, px, py, w, h); });
-  const up = () => { s.hold = false; }; cv.addEventListener("pointerup", up); cv.addEventListener("pointerleave", up);
+  const up = () => { s.hold = false; P.up && P.up(s); }; cv.addEventListener("pointerup", up); cv.addEventListener("pointerleave", up); cv.addEventListener("pointercancel", up);
+  if (P.move) { cv.style.touchAction = "none"; cv.addEventListener("pointermove", e => { const r = cv.getBoundingClientRect(); P.move(s, e.clientX - r.left, e.clientY - r.top, w, h); }); }
   const close = () => { run = false; clearInterval(type); ov.classList.remove("on"); setTimeout(() => ov.remove(), 400); o.onClose && o.onClose(); };
   ov.querySelector(".sc-x").onclick = close; if (P.auto) setTimeout(() => { if (ov.isConnected) ov.classList.add("done"); }, P.auto);
   return close;
 }
 /* which piece fits the weather right now */
 export function weatherMotion(v) { const hr = new Date().getHours(), txt = (v && v.text) || ""; if (hr >= 20 || hr < 5) return "stars"; if (/雨|hujan|rain|雷/i.test(txt)) return "rain"; if (v && (v.temp >= 31 || v.hi >= 32)) return "melon"; if (/云|阴|雾|cloud/i.test(txt)) return "puffs"; return v && v.temp >= 28 ? "melon" : "puffs"; }
+/* the little games you can open any time from 玩法 */
+export const GAMES = [["tea", "冲一泡工夫茶", "关公巡城，三杯倒满"], ["qian", "求一支旅行签", "摇三下，看今天的签"], ["lantern", "放一盏河灯", "每盏灯带一个愿望"], ["sparkler", "仙女棒写字", "用手指在夜里写一个字"], ["melon", "西瓜冰", "点一下加一块冰"], ["rain", "落一场雨", "按住云朵"], ["puffs", "放空 15 秒", "点亮光团"], ["stars", "星空灯", "睡前点月亮"]];
 if (typeof window !== "undefined") window.tdMotion = playMotion;

@@ -33,6 +33,13 @@ export const cityOf = d => { const a = dayActs(d).find(x => x.city); if (a) retu
 export const tripCityKey = () => CITY_KEY[cityOf(today())] || null;
 export const cityGuide = d => guideFor(cityOf(d));
 export const lockedKinds = ["transit", "lodging", "flight"];
+/* 私人清单: private items (or a category called 私人…) only show for the person who wrote them */
+const PRIV_CAT = /私人|私密|个人物品/;
+export const isPrivCheck = c => !!c.private || PRIV_CAT.test(c.category || "");
+const mineCheck = c => !c.created_by || !api.me || c.created_by === api.me.id;
+/* before migration_4 there is no private column: fall back to a 私人清单 category, which the app hides from buddies */
+async function addPrivCheck(cat, label) { try { await api.addCheck(cat, label, 9999, true); } catch (e) { if (e && e.code === "NEED_MIGRATION_4") await api.addCheck(PRIV_CAT.test(cat) ? cat : "私人清单", label, 9999, false); else throw e; } }
+const visibleChecks = () => checks.filter(c => !isPrivCheck(c) || mineCheck(c));
 export const usable = a => a.status !== "removed" && a.status !== "skipped" && !a.is_main && !lockedKinds.includes(a.kind);
 export async function loadTrip() {
   if (!api.trip) { acts = []; checks = []; customs = []; ready = true; render(); return; }
@@ -56,12 +63,12 @@ export function render() {
   const days = tripDays();
   if (!selDate || !days.includes(selDate)) selDate = days.includes(today()) ? today() : days[0];
   const d = selDate, idx = dayIndex(d), city = cityOf(d), stay = stayFor(d), list = dayActs(d);
-  const doneN = checks.filter(c => c.done).length;
+  const vis = visibleChecks(), doneN = vis.filter(c => c.done).length;
   const isToday = d === today();
   const stamps = myStamps();
   let h = `<div class="tp-top"><button class="trip-sw" data-act="trips" aria-label="切换旅行"><small>${api.trip.kind === "solo" ? "个人旅行" : "旅行房间 · " + api.members.length + " 人"} ⇄</small><h2>${esc(api.trip.name)}</h2></button><button class="icon-btn" data-act="settings" aria-label="设置">⚙︎</button></div>
     <div class="day-strip" role="tablist">${days.map((x, i) => `<button class="day-chip${x === d ? " on" : ""}${x === today() ? " now" : ""}" data-day="${x}" role="tab" aria-selected="${x === d}"><b>Day ${i + 1}</b><span>${shortDate(x)} ${weekday(x)}</span></button>`).join("")}</div>
-    <div class="seg seg-top" style="margin:10px 18px 0"><button class="${seg === "plan" ? "on" : ""}" data-seg="plan">日程</button><button class="${seg === "map" ? "on" : ""}" data-seg="map">地图</button><button class="${seg === "guide" ? "on" : ""}" data-seg="guide">攻略</button><button class="${seg === "check" ? "on" : ""}" data-seg="check">清单 ${doneN}/${checks.length}</button></div>`;
+    <div class="seg seg-top" style="margin:10px 18px 0"><button class="${seg === "plan" ? "on" : ""}" data-seg="plan">日程</button><button class="${seg === "map" ? "on" : ""}" data-seg="map">地图</button><button class="${seg === "guide" ? "on" : ""}" data-seg="guide">攻略</button><button class="${seg === "check" ? "on" : ""}" data-seg="check">清单 ${doneN}/${vis.length}</button></div>`;
   if (seg === "map") {
     const md = mapDay || d, t = mapTools(), miss = missingCoords(acts, md, days);
     h += `<div class="map-bar"><button class="chip sm${md === "all" ? " on" : ""}" data-mday="all">全部路线</button>${days.map((x, i) => `<button class="chip sm${md === x ? " on" : ""}" data-mday="${x}" style="--c:#3a2c1f">D${i + 1}</button>`).join("")}</div>
@@ -73,7 +80,7 @@ export function render() {
   }
   if (seg === "plan") {
     h += reviewInboxHTML();
-    h += `<div class="day-head kraft"><div><small>DAY ${idx} · ${shortDate(d)} ${weekday(d)}${isToday ? " · 今天" : ""}</small><b>${esc(city)}</b>${isToday ? `<span class="wx" id="dayWx"></span>` : ""}${d <= today() && needsSeal(city) ? `<button class="seal-chip" data-act="seal">✦ 盖${esc(city)}入境章</button>` : ""}</div>${stay ? `<p>🛏 ${esc(stay.name)}<br><span>${esc(stay.note)}</span></p>` : ""}</div>`;
+    h += `<div class="day-head kraft"><div><small>DAY ${idx} · ${shortDate(d)} ${weekday(d)}${isToday ? " · 今天" : ""}</small><b>${esc(city)}</b>${isToday ? `<span class="wx" id="dayWx"></span>` : ""}${needsSeal(city) ? `<button class="seal-chip" data-act="seal">✦ 盖${esc(city)}入境章</button>` : ""}</div>${stay ? `<p>🛏 ${esc(stay.name)}<br><span>${esc(stay.note)}</span></p>` : ""}</div>`;
     if (idx === 1) h += departuresHTML();
     if (!list.length) h += `<p class="empty">这一天还没有安排</p>`;
     h += `<ol class="tl">`;
@@ -86,7 +93,7 @@ export function render() {
         <button class="tl-btn" data-open="${a.id}">
           <time>${a.was_time ? `<s>${a.was_time}</s>` : ""}${a.time}</time>
           <span class="tl-body"><b>${esc(a.title)}${a.was_title ? ` <s>${esc(a.was_title)}</s>` : ""}</b>
-            <span class="tl-meta">${KIND_LABEL[a.kind] || ""}${a.dur ? " · " + (a.dur >= 60 ? (a.dur / 60).toFixed(a.dur % 60 ? 1 : 0) + "h" : a.dur + "min") : ""}${a.extra_min ? ` · <em>+${a.extra_min / 60}h 时间暂停</em>` : ""}${a.is_main ? " · 🔒主要行程" : ""}${a.source === "special" ? " · ✦计划外" : ""}${st === "skipped" ? " · 已传送跳过" : ""}${st === "removed" ? " · 已删除" : ""}</span>
+            <span class="tl-meta">${KIND_LABEL[a.kind] || ""}${a.dur ? " · " + durLabel(a.dur) : ""}${a.extra_min ? ` · <em>+${a.extra_min / 60}h 时间暂停</em>` : ""}${a.is_main ? " · 🔒主要行程" : ""}${a.source === "special" ? " · ✦计划外" : ""}${st === "skipped" ? " · 已传送跳过" : ""}${st === "removed" ? " · 已删除" : ""}</span>
             ${a.note ? `<span class="tl-note">${esc(a.note)}</span>` : ""}
             ${st === "done" ? `<span class="tl-done">✓ ${esc(nameOf(a.done_by))} 标记完成</span>` : ""}</span>
           ${mine.length ? `<span class="tl-stamp" title="已打卡">印</span>` : ""}
@@ -98,13 +105,16 @@ export function render() {
   } else if (seg === "guide") {
     h += guideHTML();
   } else if (seg === "check") {
-    const cats = [...new Set(checks.map(c => c.category))];
-    h += `<p class="col-note">清单是大家共用的，谁打了勾所有人都能看到。</p>`;
-    cats.forEach(cat => {
-      const items = checks.filter(c => c.category === cat);
-      h += `<div class="ck-cat"><h3>${esc(cat)} <small>${items.filter(i => i.done).length}/${items.length}</small></h3><ul>${items.map(i => `<li class="${i.done ? "done" : ""}"><button class="ck-box" data-ck="${i.id}" role="checkbox" aria-checked="${i.done}" aria-label="${esc(i.label)}"></button><span><b data-ckren="${i.id}" data-l="${esc(i.label)}">${esc(i.label)}</b>${i.done ? `<small>✓ ${esc(nameOf(i.done_by))} · ${whenTxt(i.done_at)}</small>` : ""}</span><button class="x" data-ckdel="${i.id}" aria-label="删除">×</button></li>`).join("")}</ul>
-        <div class="addrow"><input class="inp" data-newin="${esc(cat)}" placeholder="加一项到「${esc(cat)}」" maxlength="40"><button class="btn" data-newck="${esc(cat)}">添加</button></div></div>`;
-    });
+    const priv = vis.filter(isPrivCheck), pub = vis.filter(c => !isPrivCheck(c));
+    const itemLi = (i, p) => `<li class="${i.done ? "done" : ""}"><button class="ck-box" data-ck="${i.id}" role="checkbox" aria-checked="${i.done}" aria-label="${esc(i.label)}"></button><span><b data-ckren="${i.id}" data-l="${esc(i.label)}">${esc(i.label)}</b>${i.done ? `<small>✓ ${p ? "" : esc(nameOf(i.done_by)) + " · "}${whenTxt(i.done_at)}</small>` : ""}</span>${p ? (i.private ? `<button class="ck-lock on" data-ckpub="${i.id}" aria-label="改成大家共用" title="改成大家共用">${ic("lock-simple")}</button>` : "") : `<button class="ck-lock" data-ckpriv="${i.id}" aria-label="改成私人" title="改成私人，只有你看得到">${ic("lock-simple")}</button>`}<button class="x" data-ckdel="${i.id}" aria-label="删除">×</button></li>`;
+    const catBlock = (list, p) => [...new Set(list.map(c => c.category))].map(cat => { const items = list.filter(c => c.category === cat);
+      return `<div class="ck-cat${p ? " priv" : ""}"><h3>${esc(cat)} <small>${items.filter(i => i.done).length}/${items.length}</small></h3><ul>${items.map(i => itemLi(i, p)).join("")}</ul>
+        <div class="addrow"><input class="inp" data-newin="${esc(cat)}" data-priv="${p ? 1 : ""}" placeholder="加一项到「${esc(cat)}」" maxlength="40"><button class="btn" data-newck="${esc(cat)}" data-priv="${p ? 1 : ""}">添加</button></div></div>`; }).join("");
+    h += `<div class="ck-priv"><div class="ck-priv-h">${ic("lock-simple")}<b>我的私人清单</b><small>只有你看得到，旅伴看不到你带了什么</small></div>
+      ${priv.length ? catBlock(priv, true) : `<p class="as-hint">还没有私人物品。药、贴身衣物、自己的小东西，写在这里就好。</p>`}
+      <div class="addrow"><input class="inp" id="newPriv" placeholder="加一样私人物品" maxlength="40"><button class="btn ink" data-act="newpriv">${ic("lock-simple")} 添加</button></div></div>`;
+    h += `<p class="col-note">下面的清单是大家共用的，谁打了勾所有人都能看到。点 ${ic("lock-simple")} 可以把一项改成私人。</p>`;
+    h += catBlock(pub, false);
     h += `<div class="ck-cat"><div class="addrow"><input class="inp" id="newCat" placeholder="新的分类，比如：伴手礼" maxlength="16"><button class="btn" data-act="newcat">新分类</button></div></div>`;
   }
   const keepY = root.scrollTop, strip0 = root.querySelector(".day-strip"), keepX = strip0 ? strip0.scrollLeft : null;
@@ -128,16 +138,29 @@ export function render() {
   root.querySelectorAll("[data-ck]").forEach(b => b.onclick = async () => { const it = checks.find(c => c.id === b.dataset.ck); it.done = !it.done; it.done_by = api.me.id; it.done_at = new Date().toISOString(); sfx[it.done ? "stamp" : "tap"](); render(); try { await api.setCheck(it.id, it.done); } catch (e) { toast("没能同步，请检查网络"); } });
   root.querySelectorAll("[data-ckren]").forEach(b => b.onclick = async () => { const n = prompt("改成", b.dataset.l); if (!n || n.trim() === b.dataset.l) return; try { await api.renameCheck(b.dataset.ckren, n.trim()); } catch (e) { toast("没能改"); } });
   root.querySelectorAll("[data-ckdel]").forEach(b => b.onclick = async () => { if (!confirm("删除这一项？")) return; try { await api.deleteCheck(b.dataset.ckdel); } catch (e) { toast("没能删除"); } });
-  root.querySelectorAll("[data-newck]").forEach(b => b.onclick = async () => { const inp = root.querySelector(`[data-newin="${CSS.escape(b.dataset.newck)}"]`), v = inp.value.trim(); if (!v) return; try { await api.addCheck(b.dataset.newck, v, 9999); sfx.tap(); } catch (e) { toast("没能添加"); } });
+  const privErr = e => toast(e && e.code === "NEED_MIGRATION_4" ? "私人清单要先在 Supabase 运行 migration_4.sql" : "没能添加");
+  root.querySelectorAll("[data-newck]").forEach(b => b.onclick = async () => { const p = !!b.dataset.priv, inp = root.querySelector(`[data-newin="${CSS.escape(b.dataset.newck)}"][data-priv="${p ? 1 : ""}"]`), v = inp.value.trim(); if (!v) return; try { if (p) await addPrivCheck(b.dataset.newck, v); else await api.addCheck(b.dataset.newck, v, 9999); sfx.tap(); } catch (e) { privErr(e); } });
+  root.querySelectorAll("[data-ckpriv]").forEach(b => b.onclick = async () => { try { await api.setCheckPrivate(b.dataset.ckpriv, true); sfx.tap(); toast("改成私人了，只有你看得到"); } catch (e) { privErr(e); } });
+  root.querySelectorAll("[data-ckpub]").forEach(b => b.onclick = async () => { if (!confirm("改成大家共用？旅伴会看到这一项。")) return; try { await api.setCheckPrivate(b.dataset.ckpub, false); sfx.tap(); } catch (e) { privErr(e); } });
   bind(root, {
     settings: () => openSettings(), trips: () => openTrips(), dep: () => openDeparture(), seal: () => sealCeremony(city, d),
     mdark: () => { const t = mapTools(); t.setDark(!t.dark); render(); }, mme: () => mapTools().locate(), medit: () => { const t = mapTools(); t.setEdit(!t.editPins); render(); },
     add: () => openAdd(),
     special: () => openSpecial({ date: selDate, city: cityOf(selDate) }),
+    newpriv: async () => { const v = $("newPriv").value.trim(); if (!v) return; const cat = (visibleChecks().find(isPrivCheck) || {}).category || "私人清单"; try { await addPrivCheck(cat, v); sfx.tap(); } catch (e) { toast("没能添加"); } },
     newcat: async () => { const v = $("newCat").value.trim(); if (!v) return; try { await api.addCheck(v, "（新项目）", 99999); } catch (e) { toast("没能添加"); } }
   });
 }
 export const setSelDate = d => { selDate = d; render(); };
+export const getSelDate = () => selDate;
+/* how long a stop takes: quick picks + free minutes */
+export const DUR_PICKS = [15, 30, 45, 60, 90, 120, 180, 240];
+export const durLabel = m => m >= 60 ? (m % 60 ? `${Math.floor(m / 60)}h${m % 60}` : `${m / 60}h`) : `${m}min`;
+export function durPicker(id, cur = 60) { return `<div class="dur-pick" id="${id}" data-v="${cur}"><small>停留多久</small><div class="chips-wrap">${DUR_PICKS.map(m => `<button type="button" class="chip sm${m === cur ? " on" : ""}" data-dur="${m}" style="--c:#3a2c1f">${durLabel(m)}</button>`).join("")}<label class="dur-own"><input class="inp" type="number" min="5" max="720" step="5" inputmode="numeric" placeholder="自己填" aria-label="分钟"${DUR_PICKS.includes(cur) ? "" : ` value="${cur}"`}><span>分钟</span></label></div></div>`; }
+export function wireDur(root, id) { const el = root.querySelector("#" + id); if (!el) return () => 60; const inp = el.querySelector("input");
+  el.querySelectorAll("[data-dur]").forEach(b => b.onclick = () => { el.dataset.v = b.dataset.dur; inp.value = ""; el.querySelectorAll("[data-dur]").forEach(x => x.classList.toggle("on", x === b)); sfx.tap(); });
+  inp.oninput = () => { const v = Math.round(+inp.value); if (v > 0) { el.dataset.v = String(v); el.querySelectorAll("[data-dur]").forEach(x => x.classList.remove("on")); } };
+  return () => Math.max(5, Math.min(720, +el.dataset.v || 60)); }
 
 function openActivity(id) {
   const a = acts.find(x => x.id === id); if (!a) return;
@@ -154,7 +177,7 @@ function openActivity(id) {
     <div class="as-btns">
       ${canCheck && a.status !== "removed" ? `<button class="btn ink full" data-act="checkin">${ic("stamp")} 抵达打卡 · 盖章</button>` : ""}
       <div class="row"><button class="btn" data-act="done">${a.status === "done" ? "取消完成" : "✓ 标记完成"}</button><button class="btn" data-act="main">${a.is_main ? "取消主要行程" : "设为主要行程"}</button></div>
-      <div class="row"><button class="btn" data-act="rename">改名字 / 备注</button><button class="btn" data-act="time">改时间</button>${a.status === "skipped" || a.status === "removed" ? `<button class="btn" data-act="restore">恢复</button>` : ""}<button class="btn warn" data-act="del">删除</button></div>
+      <div class="row"><button class="btn" data-act="rename">改名字 / 备注</button><button class="btn" data-act="time">改时间 / 时长</button>${a.status === "skipped" || a.status === "removed" ? `<button class="btn" data-act="restore">恢复</button>` : ""}<button class="btn warn" data-act="del">删除</button></div>
       <p class="as-hint">${ic("lock-simple")} 主要行程不能被技能卡影响（行程表规则）。</p>
     </div></div>`, { accent: "#3a2c1f" });
   bind(sh, {
@@ -163,23 +186,32 @@ function openActivity(id) {
     main: async () => { try { await api.updateActivity(a.id, { is_main: !a.is_main }); closeSheet(); } catch (e) { toast("没能保存"); } },
     restore: async () => { try { await api.updateActivity(a.id, { status: "planned" }); closeSheet(); } catch (e) { toast("没能保存"); } },
     rename: async () => { const n = prompt("地点名字", a.title); if (n === null) return; const note = prompt("备注（可以留空）", a.note || ""); if (note === null) return; try { await api.updateActivity(a.id, { title: n.trim() || a.title, note: note.trim() || null }); closeSheet(); } catch (e) { toast("没能保存"); } },
-    time: async () => { const v = prompt("新的时间（HH:MM）", a.time); if (!v || !/^\d{1,2}:\d{2}$/.test(v)) return; try { await api.updateActivity(a.id, { time: v.padStart(5, "0") }); closeSheet(); } catch (e) { toast("没能保存"); } },
+    time: () => openTimeEdit(a),
     del: async () => { if (!confirm(`删除「${a.title}」？所有人的行程都会删除这一项。`)) return; try { await api.deleteActivity(a.id); closeSheet(); } catch (e) { toast("没能删除"); } }
   });
 }
 
+function openTimeEdit(a) {
+  const sh = openSheet(`<div class="as"><small class="as-k">${shortDate(a.date)} ${weekday(a.date)}</small><h3>${esc(a.title)}</h3>
+    <label class="lbl">几点开始<input class="inp" type="time" id="teT" value="${esc(a.time)}"></label>
+    ${durPicker("teDur", a.dur || 60)}
+    <div class="as-btns"><div class="row"><button class="btn" data-act="cancel">取消</button><button class="btn ink" data-act="save">保存</button></div></div></div>`, { accent: "#3a2c1f" });
+  const getDur = wireDur(sh, "teDur");
+  bind(sh, { cancel: closeSheet, save: async () => { const t = $("teT").value; if (!/^\d{1,2}:\d{2}$/.test(t)) return toast("写上时间"); try { await api.updateActivity(a.id, { time: t.padStart(5, "0"), dur: getDur() }); sfx.tap(); closeSheet(); toast("改好了"); } catch (e) { toast("没能保存"); } } });
+}
 function openAdd(prefill) {
-  const d = selDate, city = cityOf(d), gd = guideFor(city), sugg = [...(gd ? gd.spots.map(x => x.n) : []), ...(EXTRA_PLACES[city] || []), ...customs.filter(c => c.kind === "spot" && c.city === city).map(c => c.name)].filter((x, i, a) => a.indexOf(x) === i && !dayActs(d).some(y => y.title === x));
+  const d = (prefill && prefill.date) || selDate, city = cityOf(d), gd = guideFor(city), sugg = [...(gd ? gd.spots.map(x => x.n) : []), ...(EXTRA_PLACES[city] || []), ...customs.filter(c => c.kind === "spot" && c.city === city).map(c => c.name)].filter((x, i, a) => a.indexOf(x) === i && !dayActs(d).some(y => y.title === x));
   const sh = openSheet(`<div class="as"><small class="as-k">DAY ${dayIndex(d)} · ${shortDate(d)} · ${esc(city)}</small><h3>加一个地点</h3>
     <p class="as-hint" style="margin-top:0">从行程表里的候补地点挑一个，或者自己写。</p>
     <div class="chips-wrap">${sugg.map(s => `<button class="chip sm" data-sug="${esc(s)}">${esc(s)}</button>`).join("")}</div>
     <div class="addrow"><input class="inp" type="time" id="addT" value="${prefill && prefill.time || "15:00"}" aria-label="时间"><input class="inp" id="addN" maxlength="30" placeholder="地点名字" value="${esc(prefill && prefill.name || "")}"></div>
     <div class="seg" id="addK"><button class="on" data-k="sight">景点</button><button data-k="food">美食</button></div>
+    ${durPicker("addDur", 60)}
     <div class="as-btns"><button class="btn ink full" data-act="save">加入行程</button></div></div>`, { accent: "#3a2c1f" });
-  let kind = "sight";
+  let kind = "sight"; const getDur = wireDur(sh, "addDur");
   sh.querySelectorAll("[data-sug]").forEach(b => b.onclick = () => { $("addN").value = b.dataset.sug; sfx.tap(); });
   sh.querySelectorAll("#addK [data-k]").forEach(b => b.onclick = () => { kind = b.dataset.k; sh.querySelectorAll("#addK button").forEach(x => x.classList.toggle("on", x === b)); });
-  bind(sh, { save: async () => { const n = $("addN").value.trim(), t = $("addT").value; if (!n || !t) return toast("写上时间和地点"); const gsp = guideSpot(n); try { await api.addActivity({ date: d, time: t, title: n, city, kind, dur: 60, source: "added", ...(gsp && gsp.ll ? { lat: gsp.ll[0], lng: gsp.ll[1] } : {}) }); sfx.stamp(); closeSheet(); toast(`「${n}」已加入 Day ${dayIndex(d)}`); if (prefill && prefill.after) prefill.after(n); } catch (e) { toast("没能保存"); } } });
+  bind(sh, { save: async () => { const n = $("addN").value.trim(), t = $("addT").value; if (!n || !t) return toast("写上时间和地点"); const gsp = guideSpot(n); try { await api.addActivity({ date: d, time: t, title: n, city, kind, dur: getDur(), source: "added", ...(gsp && gsp.ll ? { lat: gsp.ll[0], lng: gsp.ll[1] } : {}) }); sfx.stamp(); closeSheet(); toast(`「${n}」已加入 Day ${dayIndex(d)}`); if (prefill && prefill.after) prefill.after(n); } catch (e) { toast("没能保存"); } } });
 }
 export { openAdd };
 

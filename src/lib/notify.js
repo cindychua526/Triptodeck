@@ -14,7 +14,7 @@ export const onNotifyAction = (kind, f) => { handlers[kind] = f; };
 export function banner(n) { q.push(n); if (!showing) next(); systemNotify(n); }
 function next() {
   const n = q.shift(); if (!n) { showing = false; return; } showing = true;
-  const el = document.createElement("div"); el.className = "nb"; el.setAttribute("role", "status");
+  const el = document.createElement("div"); el.className = "nb nb-banner"; el.setAttribute("role", "status");
   el.innerHTML = `<div class="nb-in"><div class="nb-art">${n.art || `<span>${n.icon || "✦"}</span>`}</div><div class="nb-txt"><small>${esc(n.kicker || "THE TRIP DECK")}</small><b>${esc(n.title)}</b>${n.body ? `<p>${esc(n.body)}</p>` : ""}</div>${n.action ? `<button class="nb-go">${esc(n.action)}</button>` : ""}</div>`;
   document.body.appendChild(el); requestAnimationFrame(() => el.classList.add("on"));
   sfx.bell ? sfx.bell() : sfx.tap(); buzz([12, 40, 12]);

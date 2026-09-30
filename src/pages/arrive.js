@@ -66,6 +66,7 @@ export function refreshArrive(cityFn) {
   const city = (cityFn || refreshArrive.cityFn || (() => null))(); if (cityFn) refreshArrive.cityFn = cityFn;
   if (needsSeal(city)) { el.innerHTML = `<button class="arrive-pill">✦ 抵达${esc(city)} · 盖入境章</button>`; el.querySelector("button").onclick = () => sealCeremony(city); }
   else if (new Date().getHours() >= 21 || new Date().getHours() < 4) { el.innerHTML = `<button class="arrive-pill night">☾ 打开星空灯 · 晚安</button>`; el.querySelector("button").onclick = () => import("../lib/motion.js").then(m => m.playMotion("stars")); }
+  else if (new Date().getHours() >= 15 && new Date().getHours() < 17 && !sessionStorage.getItem("td-tea-" + today())) { el.innerHTML = `<button class="arrive-pill tea">🍵 下午茶时间 · 冲一泡工夫茶</button>`; el.querySelector("button").onclick = () => { try { sessionStorage.setItem("td-tea-" + today(), "1"); } catch (e) {} import("../lib/motion.js").then(m => m.playMotion("tea")); refreshArrive(); }; }
   else if (api.trip && today() >= api.trip.end_date) { el.innerHTML = `<button class="arrive-pill gold">${ic("receipt")} 旅行结束了 · 打印你的旅行发票</button>`; el.querySelector("button").onclick = () => import("./receipt.js").then(m => m.openReceipt()); }
   else el.innerHTML = "";
 }

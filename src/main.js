@@ -2,6 +2,7 @@ import "./styles.css";
 import "./skin.css";
 import "./stage.css";
 import "./washi.css";
+import "./extra.css";
 import { startI18n } from "./lib/i18n.js";
 import { renderToday } from "./pages/today.js";
 import "./lib/atmos.js";
@@ -11,6 +12,7 @@ import "./lib/keepon.js";
 import { ic } from "./lib/icons.js";
 document.querySelectorAll("[data-ic]").forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 import "./lib/motion.js";
+import "./lib/grey.js";
 import { api, on } from "./lib/api.js";
 import { $ } from "./lib/util.js";
 import { initUI, closeSheet, sheetOpen } from "./lib/ui.js";
@@ -18,7 +20,7 @@ import { sfx, soundOn, setSound, onSoundChange, unlock } from "./lib/sound.js";
 import { onboard } from "./pages/onboard.js";
 import { loadTrip, render as renderTrip } from "./pages/trip.js";
 import { initCollection, loadStamps, renderBook } from "./pages/collection.js";
-import { initTickets, onShow as showTickets, refreshTripTickets } from "./pages/tickets.js";
+import { initTickets, onShow as showTickets, refreshTripTickets, markBookSeen } from "./pages/tickets.js";
 import { onShowDeck } from "./pages/deck.js";
 import { render as renderCoin, loadCoin } from "./pages/coin.js";
 import { loadBudget, render as renderBudget } from "./pages/budget.js";
@@ -55,7 +57,7 @@ document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.datase
   if (p === "deck") onShowDeck();
   if (p === "coin") { renderCoin(); loadCoin(); }
   if (p === "tear") showTickets();
-  if (p === "collect") { renderBook(); showTickets(); }
+  if (p === "collect") { renderBook(); showTickets(); markBookSeen(); }
   if (p === "budget") renderBudget();
   if (p === "fortune" && fortuneMod) fortuneMod.fortuneResize();
   syncSound();
@@ -79,7 +81,7 @@ async function start() {
   go(m ? m[1] : "fortune", false);
   if (s && api.trips.length) openShelf();
   startI18n(); renderToday();
-  setCardArt(k => { try { return cardHTML(k, { cls: "mini" }); } catch (e) { return ""; } }); startNotify();
+  setCardArt(k => { try { return cardHTML(k, { cls: "mini" }); } catch (e) { return ""; } }); startNotify(); setTimeout(() => import("./lib/ooc.js").then(m => m.checkOOC()), 2200);
   onNotifyAction("skill", () => go("deck")); onNotifyAction("reviewed", () => { go("collect"); setTimeout(() => openBookPart("passport"), 300); }); onNotifyAction("receipt", () => openReceipt());
 }
 start();

@@ -77,7 +77,6 @@ function cloud() {
       if (!prof) need(await sb.from("profiles").upsert({ id: u.id, display_name: (me && me.name) || "旅伴" }));
       me = { id: u.id, name: prof ? prof.display_name : ((me && me.name) || "旅伴") }; await refreshTrips(); return me;
     },
-    async signOut() { await sb.auth.signOut(); try { localStorage.removeItem("td-trip"); } catch (e) {} },
     listTrips: refreshTrips,
     async createTrip(o) {
       const t = need(await sb.rpc("create_trip", { p_name: o.name, p_start: o.start, p_end: o.end, p_budget: o.budget || 3000, p_kind: o.kind || "group", p_cities: o.cities || [], p_template: o.template || null }));
@@ -98,7 +97,9 @@ function cloud() {
     async updateActivity(id, patch) { need(await sb.from("activities").update(patch).eq("id", id)); emit("activities"); },
     async deleteActivity(id) { need(await sb.from("activities").delete().eq("id", id)); emit("activities"); },
     async checklist() { return need(await sb.from("checklist_items").select("*").eq("trip_id", trip.id).order("sort").order("created_at")); },
-    async addCheck(category, label, sort) { need(await sb.from("checklist_items").insert({ trip_id: trip.id, category, label, sort })); emit("checklist_items"); },
+    async addCheck(category, label, sort, priv) { const row = { trip_id: trip.id, category, label, sort, created_by: me.id }; if (priv) row.private = true;
+      const r = await sb.from("checklist_items").insert(row); if (r.error && priv && /private|column|PGRST204|42703/i.test((r.error.code || "") + r.error.message)) { const e = new Error("NEED_MIGRATION_4"); e.code = "NEED_MIGRATION_4"; throw e; } need(r); emit("checklist_items"); },
+    async setCheckPrivate(id, priv) { const r = await sb.from("checklist_items").update({ private: !!priv }).eq("id", id); if (r.error && /private|column|PGRST204|42703/i.test((r.error.code || "") + r.error.message)) { const e = new Error("NEED_MIGRATION_4"); e.code = "NEED_MIGRATION_4"; throw e; } need(r); emit("checklist_items"); },
     async setCheck(id, done) { need(await sb.from("checklist_items").update({ done, done_by: done ? me.id : null, done_at: done ? new Date().toISOString() : null }).eq("id", id)); emit("checklist_items"); },
     async deleteCheck(id) { need(await sb.from("checklist_items").delete().eq("id", id)); emit("checklist_items"); },
     async renameCheck(id, label) { need(await sb.from("checklist_items").update({ label }).eq("id", id)); emit("checklist_items"); },
@@ -118,9 +119,13 @@ function cloud() {
     async setDeparture(d) { need(await sb.from("departures").upsert({ ...d, trip_id: trip.id, user_id: me.id })); emit("departures"); },
     async uploadShared(blob) { const path = `${trip.id}/${me.id}/${Date.now()}.jpg`; need(await sb.storage.from("trip-photos").upload(path, blob, { contentType: "image/jpeg" })); return path; },
     async sharedUrl(path) { if (!path) return null; if (path.startsWith("data:")) return path; const r = await sb.storage.from("trip-photos").createSignedUrl(path, 3600); return r.data && r.data.signedUrl; },
-    async wallet() { return need(await sb.from("wallet_items").select("*").eq("user_id", me.id).order("created_at")); },
-    async putWallet(w) { need(await sb.from("wallet_items").upsert({ ...w, trip_id: w.trip_id || (trip && trip.id) })); emit("wallet"); },
-    async removeWallet(id) { need(await sb.from("wallet_items").delete().eq("spot_id", id)); emit("wallet"); },
+    async wallet(all) { let q = sb.from("wallet_items").select("*").eq("user_id", me.id); if (!all && trip) q = q.eq("trip_id", trip.id); return need(await q.order("created_at")); },
+    async putWallet(w) { const row = { ...w, user_id: me.id, trip_id: w.trip_id || (trip && trip.id) };
+      /* after migration_4 a food ticket belongs to one trip (unique user+trip+spot); before it, fall back to the old one-per-person key */
+      let r = await sb.from("wallet_items").upsert(row, { onConflict: "user_id,trip_id,spot_id" });
+      if (r.error && /42P10|no unique|ON CONFLICT/i.test((r.error.code || "") + r.error.message)) r = await sb.from("wallet_items").upsert(row);
+      need(r); emit("wallet"); },
+    async removeWallet(id) { let q = sb.from("wallet_items").delete().eq("user_id", me.id).eq("spot_id", id); if (trip) q = q.eq("trip_id", trip.id); need(await q); emit("wallet"); },
     async stamps() { return need(await sb.from("stamps").select("*").order("created_at")); },
     async deleteStamp(id) { need(await sb.from("stamps").delete().eq("id", id).eq("user_id", me.id)); emit("stamps"); },
     async addStamp(s) { const r = need(await sb.from("stamps").insert({ ...s, trip_id: trip && trip.id }).select().single()); emit("stamps"); return r; },
@@ -190,7 +195,7 @@ function local() {
   const T = n => A(n).filter(r => r.trip_id === db.cur);
   const cur = () => db && db.trips && db.trips.find(t => t.id === db.cur) || null;
   const now = () => new Date().toISOString();
-  const CARDS = ["K", "Q", "J", "10", "9", "8", "7", "6", "4", "X"];
+  const CARDS = ["K", "Q", "J", "10", "9", "8", "7", "6", "5", "4", "X"];
   const self = {
     mode: "local",
     get me() { return db && db.me; }, get trip() { return cur(); }, get trips() { return db ? db.trips || [] : []; },
@@ -221,7 +226,8 @@ function local() {
     async updateActivity(id, patch) { const r = A("activities").find(x => x.id === id); if (r) Object.assign(r, patch); save(); emit("activities"); },
     async deleteActivity(id) { db.activities = A("activities").filter(x => x.id !== id); save(); emit("activities"); },
     async checklist() { return T("checklist").sort((a, b) => a.sort - b.sort); },
-    async addCheck(category, label, sort) { A("checklist").push({ id: uid("c"), trip_id: db.cur, category, label, sort, done: false }); save(); emit("checklist_items"); },
+    async addCheck(category, label, sort, priv) { A("checklist").push({ id: uid("c"), trip_id: db.cur, category, label, sort, done: false, private: !!priv, created_by: db.me.id }); save(); emit("checklist_items"); },
+    async setCheckPrivate(id, priv) { const r = A("checklist").find(x => x.id === id); if (r) { r.private = !!priv; r.created_by = r.created_by || db.me.id; } save(); emit("checklist_items"); },
     async renameCheck(id, label) { A("checklist").find(x => x.id === id).label = label; save(); emit("checklist_items"); },
     async setCheck(id, done) { const r = A("checklist").find(x => x.id === id); Object.assign(r, { done, done_by: done ? db.me.id : null, done_at: done ? now() : null }); save(); emit("checklist_items"); },
     async deleteCheck(id) { db.checklist = A("checklist").filter(x => x.id !== id); save(); emit("checklist_items"); },
@@ -239,9 +245,9 @@ function local() {
     async setDeparture(d) { db.departures = A("departures").filter(x => !(x.trip_id === db.cur && x.user_id === db.me.id)).concat({ ...d, trip_id: db.cur, user_id: db.me.id, created_at: now() }); save(); emit("departures"); },
     async uploadShared(blob, dataUrl) { return dataUrl; },
     async sharedUrl(path) { return path; },
-    async wallet() { return A("wallet"); },
-    async putWallet(w) { db.wallet = A("wallet").filter(x => x.spot_id !== w.spot_id).concat({ trip_id: db.cur, created_at: now(), ...w }); save(); emit("wallet"); },
-    async removeWallet(id) { db.wallet = A("wallet").filter(x => x.spot_id !== id); save(); emit("wallet"); },
+    async wallet(all) { return all ? A("wallet") : A("wallet").filter(x => x.trip_id === db.cur); },
+    async putWallet(w) { const tid = w.trip_id || db.cur; db.wallet = A("wallet").filter(x => !(x.spot_id === w.spot_id && x.trip_id === tid)).concat({ created_at: now(), ...w, trip_id: tid }); save(); emit("wallet"); },
+    async removeWallet(id) { db.wallet = A("wallet").filter(x => !(x.spot_id === id && x.trip_id === db.cur)); save(); emit("wallet"); },
     async stamps() { return A("stamps"); },
     async deleteStamp(id) { db.stamps = A("stamps").filter(x => x.id !== id); save(); emit("stamps"); },
     async addStamp(s) { const r = { ...s, id: uid("s"), trip_id: db.cur, created_at: now() }; A("stamps").push(r); save(); emit("stamps"); return r; },
@@ -256,7 +262,7 @@ function local() {
     async setCaption(kind, id, caption) { const n = { stamp: "stamps", food: "food_photos", shared: "shared_photos" }[kind], r = A(n).find(x => x.id === id); if (r) r.caption = caption || null; save(); emit(n === "stamps" ? "stamps" : n); }, async buddyWallet() { return []; },
     async sharedPhotos() { return T("shared_photos").sort((a, b) => b.created_at.localeCompare(a.created_at)); },
     async addSharedPhoto(photo_path, caption, date) { A("shared_photos").push({ id: uid("sp"), trip_id: db.cur, user_id: db.me.id, photo_path, caption, date: date || new Date().toISOString().slice(0, 10), created_at: now() }); save(); emit("shared_photos"); },
-    async removeSharedPhoto(id) { db.shared_photos = A("shared_photos").filter(x => x.id !== id); save(); emit("shared_photos"); }, async myEmail() { return null; }, async emailStart() { throw new Error("单机模式没有邮箱登录"); }, async emailVerify() { throw new Error("单机模式没有邮箱登录"); }, async signOut() {}, async reclaim() { throw new Error("单机模式没有房间"); }, async removeMember() {},
+    async removeSharedPhoto(id) { db.shared_photos = A("shared_photos").filter(x => x.id !== id); save(); emit("shared_photos"); }, async myEmail() { return null; }, async emailStart() { throw new Error("单机模式没有邮箱登录"); }, async emailVerify() { throw new Error("单机模式没有邮箱登录"); }, async reclaim() { throw new Error("单机模式没有房间"); }, async removeMember() {},
     async dayLines(date) { return T("day_lines").filter(x => x.date === date); },
     async saveDayLine(date, text, mood) { const L = A("day_lines"); const i = L.findIndex(x => x.trip_id === db.cur && x.user_id === db.me.id && x.date === date); const row = { trip_id: db.cur, user_id: db.me.id, date, text, mood, id: i >= 0 ? L[i].id : uid("dl") }; if (i >= 0) L[i] = row; else L.push(row); save(); emit("day_lines"); },
     async addMoment(date, note, lat, lng) { A("moments").push({ id: uid("mo"), trip_id: db.cur, user_id: db.me.id, date, note, lat, lng, created_at: now() }); save(); emit("moments"); },
@@ -289,7 +295,7 @@ function local() {
     },
     async activateCard(id, activation, copied) { const d = A("draws").find(x => x.id === id); if (d.status === "activated") throw new Error("ALREADY_ACTIVATED"); Object.assign(d, { status: "activated", activated_at: now(), activation, copied: copied || null }); save(); return d; },
     async settleDay(date) {
-      let n = 0; T("draws").filter(x => x.date === date && x.status === "drawn").forEach(x => {
+      let n = 0; T("draws").filter(x => x.date === date && x.status === "drawn" && x.card !== "X").forEach(x => {
         if (T("effects").some(e => e.target_date === addDay(date) && e.card === x.card && e.source === "unexecuted")) return;
         const last = T("draws").filter(y => y.date === date && y.status === "activated" && y.card !== "K").sort((a, b) => b.activated_at.localeCompare(a.activated_at))[0];
         const ms = self.members, detail = x.card === "K" ? (last ? "明天自动生效：" + (last.copied || last.card) : "今天没有人发动技能，镜界没有可以复制的") : x.card === "10" ? "第一站由 " + ms[Math.floor(Math.random() * ms.length)].name + " 决定" : null;

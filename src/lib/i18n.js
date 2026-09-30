@@ -21,12 +21,12 @@ const Z2E = {
   "今日": "Today", "行程": "Plan", "玩法": "Play", "手账": "Book", "账本": "Money",
   "日程": "Schedule", "地图": "Map", "攻略": "Guide", "清单": "Checklist", "必去": "Must-see", "必吃": "Must-eat", "特色体验 · 完成拿印记": "Experiences · earn a seal",
   "早上好,": "Good morning,", "中午好,": "Good afternoon,", "下午好,": "Good afternoon,", "晚上好,": "Good evening,", "今天想去哪儿走走？": "Where to today?",
-  "今日打卡任务": "Today's mission", "去完成": "Go", "去完成": "Go", "每个旅伴今天拿到的任务都不一样": "Every buddy gets a different mission today",
+  "今日打卡任务": "Today's mission", "去完成": "Go", "每个旅伴今天拿到的任务都不一样": "Every buddy gets a different mission today",
   "轻触绳结，拆开今日旅运": "Tap the knot to open today's fortune", "每天只能抽一次哦": "One draw per day", "今天只有一个任务，完成就能盖章": "One mission today — finish it to get a stamp",
   "加一个地点": "Add a place", "＋ 加一个地点": "＋ Add a place", "✦ 临时打卡（计划外）": "✦ Unplanned check-in", "这一天还没有安排": "Nothing planned for this day",
   "各自出发": "Departures", "✈ 我从哪里出发": "✈ Where I'm leaving from", "✈ 改我的出发": "✈ Edit my departure", "还没出发": "Not yet",
   "等你确认": "Waiting for you", "全部路线": "All routes", "高德": "Amap", "☾ 夜色": "☾ Night", "☀ 原色": "☀ Day", "📍 我在哪": "📍 Where am I", "拖动调整位置": "Drag to fix pins", "完成调整": "Done",
-  "玩法": "Play", "让行程慢下来，多一点记忆点。": "Slow down, make more memories.", "旅行技能牌": "Skill Cards", "旅途通宝": "Coin of the Road", "撕美食票": "Food Tickets",
+  "让行程慢下来，多一点记忆点。": "Slow down, make more memories.", "旅行技能牌": "Skill Cards", "旅途通宝": "Coin of the Road", "撕美食票": "Food Tickets",
   "六位神话守护者，每人每天随机一张。发动的时候，旅伴们都会收到提醒。": "Six mythic guardians, one random draw per person per day. Your buddies get notified when you activate one.",
   "拿不定主意就抛一下。有字的一面是左、吃、进。": "Can't decide? Flip it. The inscribed side means left / eat / go in.",
   "吃到当地的好东西，就撕下它的票，收进票夹。": "Ate something local and good? Tear its ticket for your wallet.",
@@ -51,7 +51,7 @@ const Z2E = {
   "中国": "China", "马来西亚": "Malaysia", "新加坡": "Singapore", "泰国": "Thailand", "景点": "Sight", "美食": "Food", "小景点": "Spot", "自己加的": "Added by you",
   "✦ 我体验了": "✦ I did this", "✓ 已拿到印记": "✓ Seal earned", "✓ 已在行程里": "✓ In plan", "＋ 自己加一个地方或美食": "＋ Add a place or dish", "＋ 其他城市": "＋ Other city",
   "攻略内容是出发前整理的资料，开放时间和价格以现场为准。": "Guide notes were collected before the trip — check opening hours and prices on site.",
-  "入境章": "Entry seal", "体验印记": "Experience seal", "计划外": "Unplanned", "盖章": "Stamp", "收进手账": "Keep"
+  "入境章": "Entry seal", "体验印记": "Experience seal", "计划外": "Unplanned", "收进手账": "Keep"
 };
 let NAMES = null;
 async function names() {

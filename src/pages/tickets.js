@@ -20,8 +20,8 @@ const pad=n=>String(n).padStart(2,"0");
 const today=todayFn;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const buzz=p=>{ try{ navigator.vibrate&&navigator.vibrate(p); }catch(e){} };
-let wallet=[];
-export async function loadWallet(){ loadFoodPhotoUrls().then(()=>{ try{ renderSpots(); }catch(e){} }); try{ const rows=await api.wallet(); wallet=rows.map(r=>({id:r.spot_id,date:r.date,serial:r.serial,rating:r.rating||null,note:r.note||null,t:Date.parse(r.created_at||0)||0})).sort((a,b)=>a.t-b.t); }catch(e){ console.warn(e); } renderWallet(); updateBadge(); renderSpots(); }
+let wallet=[], walletLoaded=false;
+export async function loadWallet(){ loadFoodPhotoUrls().then(()=>{ try{ renderSpots(); }catch(e){} }); const tid=api.trip&&api.trip.id; wallet=[]; walletLoaded=false; renderWallet(); updateBadge(); try{ const rows=(await api.wallet()).filter(r=>!tid||r.trip_id===tid); if(!api.trip||api.trip.id!==tid) return; wallet=rows.map(r=>({id:r.spot_id,date:r.date,serial:r.serial,rating:r.rating||null,note:r.note||null,t:Date.parse(r.created_at||0)||0})).sort((a,b)=>a.t-b.t).filter((w,i,a)=>a.findIndex(x=>x.id===w.id)===i); }catch(e){ console.warn(e); } walletLoaded=true; renderWallet(); updateBadge(); renderSpots(); }
 function persistOne(w){ const sp=spotById(w.id); api.putWallet({spot_id:w.id,date:w.date,serial:w.serial,rating:w.rating||null,note:w.note||null,city:sp?CITY[sp.c].name:null}).catch(()=>toast("票夹没能同步，请检查网络")); }
 /* ---------- helpers ---------- */
 const spotById=id=>SPOTS.find(s=>s.id===id);
@@ -64,7 +64,10 @@ function blankHTML(s,tw){
 }
 
 export function onShow(){ layoutTape(); renderWallet(); const sc=$("scene"); if(sc&&!sc.querySelector(".chalk")){ const c=document.createElement("div"); c.className="chalk"; c.innerHTML=[["fruit",6,4,26],["drink",64,2,22],["noodles",70,58,30],["star",8,60,14]].map(([d,x,y,w])=>`<span style="left:${x}%;top:${y}%;width:${w}%">${doodle(d,{sketch:true,ink:"#a0764a",accent:"#a0764a",seed:x})}</span>`).join(""); sc.prepend(c);} }
-function updateBadge(){ const b=$("badge"); if(b) b.textContent=wallet.length||""; }
+/* the red number on 手账 = new things since you last opened it (not the total) */
+const seenKey=()=>"td-seen-book:"+(api.trip?api.trip.id:"");
+function updateBadge(){ const b=$("badge"); if(!b) return; let seen=null; try{ seen=localStorage.getItem(seenKey()); }catch(e){} if(seen===null){ if(!walletLoaded){ b.textContent=""; return; } try{ localStorage.setItem(seenKey(),String(wallet.length)); }catch(e){} seen=wallet.length; } const n=Math.max(0,wallet.length-(+seen||0)); b.textContent=n?(n>9?"9+":n):""; }
+export function markBookSeen(){ try{ localStorage.setItem(seenKey(),String(wallet.length)); }catch(e){} updateBadge(); }
 
 /* ---------- tear page: country -> city -> spot ---------- */
 let country="cn", city="xm", spot=SPOTS.find(s=>s.id==="xm1"), located=null, L0=80, L=80, busy=false;
@@ -198,11 +201,14 @@ function openSheet(fromWallet, inSheet){
     ${s.o?`<div class="sh-block"><b>出处</b><p>${s.o}</p></div>`:""}
     ${fromWallet?`<div class="sh-block"><b>你的评价 · 可以改</b></div><div class="rate-row" role="radiogroup" aria-label="好不好吃">${Object.entries(RATE).map(([k,[t,e]])=>`<button class="rate${meta.rating===k?" on":""}" data-rate="${k}" role="radio" aria-checked="${meta.rating===k}"><span>${e}</span>${t}</button>`).join("")}</div>`:`<div class="rate-row" role="radiogroup" aria-label="好不好吃">${Object.entries(RATE).map(([k,[t,e]])=>`<button class="rate${cur.rating===k?" on":""}" data-rate="${k}" role="radio" aria-checked="${cur.rating===k}"><span>${e}</span>${t}</button>`).join("")}</div>`}
     <div class="sh-block sh-photos"><b>大家拍的</b><div class="shp-row" id="shPhotos"></div><label class="shp-add">${ic("camera")} 上传这道菜的照片<input type="file" accept="image/*" id="shPhotoIn" hidden></label></div>
+    ${s.cids&&s.cids.length?`<button class="linkbtn sh-del" id="shDel">${ic("trash")} 删除这道自己加的菜${s.cids.length>1?`（加了 ${s.cids.length} 次，会一起删掉）`:""}</button>`:""}
     <div class="sh-meta">${fromWallet?`${meta.date.replace(/-/g,".")} 收进票夹　${meta.serial}`:(again?"这张你已经收藏过了，可以更新打卡日期":"第一次来这里打卡")+near}</div>
     <div class="sh-btns">${fromWallet
       ?`<button class="btn" id="shRemove">移出票夹</button><button class="btn" id="shLog">记这一笔</button><button class="btn solid" id="shClose">收好了</button>`
       :`<button class="btn" id="shAgain">放回去</button><button class="btn solid" id="shSave">${again?"更新打卡日期":"收进票夹"}</button>`}</div>`;
   requestAnimationFrame(()=>sh.classList.add("on"));
+  const del=$("shDel"); if(del) del.onclick=async()=>{ const w=inWallet(s.id); if(!confirm(`删除「${s.name}」？同一个旅行房间的人也会看不到这道菜${w?"，你票夹里这张票也会一起移除":""}。`)) return;
+    try{ await Promise.all(s.cids.map(id=>api.deleteCustom(id))); if(w){ wallet=wallet.filter(x=>x.id!==s.id); api.removeWallet(s.id).catch(()=>{}); updateBadge(); renderWallet(); } closeReveal(true); toast(`「${s.name}」删掉了`); }catch(e){ toast("没能删除："+e.message); } };
   foodPhotosInto($("shPhotos"), s.name, c.name);
   $("shPhotoIn").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const small=await shrinkImage(f, api.mode==="local"?600:1280, .8); const path=api.mode==="local"?small:await api.uploadShared(dataUrlToBlob(small)); loadFoodPhotoUrls.later=true; await api.addFoodPhoto({ food:s.name, city:c.name, date:todayFn(), photo_path:path }); toast("照片放进大家的手帐了"); foodPhotosInto($("shPhotos"), s.name, c.name); }catch(err){ toast("没能上传："+err.message); } };
   if(fromWallet){
@@ -318,6 +324,7 @@ export { pickDest };
 
 /* ---------- init ---------- */
 /* food tickets: every local dish in this trip's cities (plus the ones you add yourself) */
+const dishKey=n=>String(n||"").replace(/\s|·|・/g,"").toLowerCase();
 function injectFoods(){
   Object.keys(COUNTRY).forEach(k=>delete COUNTRY[k]); Object.keys(CITY).forEach(k=>delete CITY[k]); SPOTS.length=0;
   COUNTRY.food={name:"美食",en:"Food",flag:""};
@@ -326,12 +333,14 @@ function injectFoods(){
   if(!names.length) GUIDES.slice(0,2).forEach(g=>names.push(g.name));
   names.forEach(n=>{ const g=guideFor(n), ck="f-"+n; CITY[ck]={k:"food",name:n,en:g?g.en:n,color:g?g.color:"#7a5a2c"};
     (g?g.foods:[]).forEach(f=>SPOTS.push({id:`food:${n}:${f.n}`,c:ck,name:f.n,en:f.e||"",tag:"美食",icon:"bowl",o:f.o,mean:f.d,fact:(f.d||"")+(f.where?`　📍 推荐：${f.where}`:""),where:f.where,lat:0,lng:0}));
-    (customs||[]).filter(c=>c.kind==="food"&&c.city===n).forEach(c=>SPOTS.push({id:`food:${n}:${c.name}`,c:ck,name:c.name,en:"",tag:"自己加的",icon:"bowl",mean:c.note||"你们自己发现的好吃的。",fact:c.note||"",lat:0,lng:0}));
+    (customs||[]).filter(c=>c.kind==="food"&&c.city===n).forEach(c=>{ const dup=SPOTS.find(x=>x.c===ck&&dishKey(x.name)===dishKey(c.name));
+      if(dup){ if(dup.tag==="自己加的"){ dup.cids.push(c.id); if(!dup.fact&&c.note){ dup.mean=dup.fact=c.note; } } return; }
+      SPOTS.push({id:`food:${n}:${c.name}`,c:ck,name:c.name,en:"",tag:"自己加的",icon:"bowl",mean:c.note||"你们自己发现的好吃的。",fact:c.note||"",lat:0,lng:0,cids:[c.id]}); });
   });
   return true;
 }
 function todayCityKey(){ const n=cityOf(todayFn()); return CITY["f-"+n]?"f-"+n:Object.keys(CITY)[0]; }
-on("trip",()=>{ injectFoods(); renderCountries(); setCountry("food",true); setCity(todayCityKey()); renderWallet(); });
+on("trip",()=>{ injectFoods(); renderCountries(); setCountry("food",true); setCity(todayCityKey()); loadWallet(); });
 on("custom_items",()=>{ const c=city; injectFoods(); setCountry("food",true); setCity(CITY[c]?c:todayCityKey()); });
 export function initTickets(){ injectFoods(); renderCountries(); setCountry("food",true); setCity(todayCityKey()); updateBadge(); renderWallet(); loadWallet(); }
 export function refreshTripTickets(){ injectFoods(); renderCountries(); setCountry("food",true); setCity(todayCityKey()); renderWallet(); }
@@ -343,7 +352,9 @@ function openAddFood(){
     <label class="lbl">菜名<input class="inp" id="afName" maxlength="24" placeholder="比如：巷口那家的鱼丸汤" autofocus></label>
     <label class="lbl">一句话（可选）<input class="inp" id="afNote" maxlength="60" placeholder="在哪吃的、什么味道"></label>
     <div class="as-btns"><button class="btn ink full" data-act="save">加上，去撕票</button></div></div>`,{accent:"#3a2c1f"});
-  bindU(sh,{save:async()=>{ const n=$("afName").value.trim(); if(!n) return toastU("写上菜名"); try{ await api.addCustom({city:cn,kind:"food",name:n,note:$("afNote").value.trim()||null}); closeUSheet(); setTimeout(()=>{ const id=`food:${cn}:${n}`; if(spotById(id)) setSpot(id); },400); sfx.stamp(); }catch(e){ toastU("没能保存"); } }});
+  bindU(sh,{save:async()=>{ const n=$("afName").value.trim(); if(!n) return toastU("写上菜名");
+    const had=SPOTS.find(x=>x.c===city&&dishKey(x.name)===dishKey(n)); if(had){ closeUSheet(); toastU(`「${had.name}」已经有了，不用再加`); setTimeout(()=>setSpot(had.id),350); return; }
+    try{ await api.addCustom({city:cn,kind:"food",name:n,note:$("afNote").value.trim()||null}); closeUSheet(); setTimeout(()=>{ const id=`food:${cn}:${n}`; if(spotById(id)) setSpot(id); },400); sfx.stamp(); }catch(e){ toastU("没能保存"); } }});
 }
 
 /* shared food photos: anyone can add, everyone sees them in their book */

@@ -119,6 +119,14 @@ export const FIGURES = {
       <path d="M54 66Q60 76 66 66" fill="rgba(200,176,120,.3)"/><path d="M52 70Q60 90 68 70" stroke-width=".6"/>
       <path d="M74 80L96 40" stroke-width="1.3"/><path d="M92 36a4 4 0 1 1 8 0a4 4 0 1 1-8 0z" fill="rgba(200,176,120,.3)"/>
     </g>${cloud(6, 140, .9)}${cloud(80, 138, .8, "m-cloud2")}`,
+  /* 雪女: long hair, a sleeve full of snowflakes */
+  "5": () => `${stars([[18, 18, .7], [100, 16, .9], [106, 62, .6]])}
+    <g class="m-flakes">${[[20,40,5],[98,34,6],[16,92,4],[104,96,5],[36,20,3],[84,20,3]].map(([x,y,r])=>`<g transform="translate(${x} ${y})">${[0,60,120].map(a=>`<path d="M0 -${r}V${r}" transform="rotate(${a})"/>`).join("")}<circle r="1" fill="#dfe8f2" stroke="none"/></g>`).join("")}</g>
+    <g class="m-fig"><path d="M50 70Q60 62 70 70L78 104Q82 124 88 142H32Q38 124 42 104Z" fill="rgba(223,232,242,.10)"/>
+      ${face(60, 58, 6)}<path d="M52 60Q50 44 60 43Q70 44 68 60"/><path d="M52 52Q46 80 44 104M68 52Q74 80 76 104" stroke-width=".7"/>
+      <path d="M56 44q4-6 8 0" fill="${G}" stroke="none"/><path d="M50 80Q36 78 28 66"/><path d="M70 80Q86 86 94 76"/>
+      <path d="M26 64q2-4 6-2" stroke-width=".6"/><path class="m-breath" d="M66 62q10-2 18 4q6 4 14 2" stroke="#dfe8f2" stroke-width=".6" stroke-dasharray="2 2"/>
+    </g>${cloud(6, 140, .9)}${cloud(78, 138, .8, "m-cloud2")}`,
   /* 无常: tall hat, fan, mist */
   X: () => `${stars([[20, 16, .7], [96, 14, .8], [12, 80, .6], [106, 84, .7]])}
     <g class="m-fig"><path d="M48 60Q60 54 72 60L78 104Q82 124 86 142H34Q38 124 42 104Z" fill="rgba(201,195,214,.08)"/>

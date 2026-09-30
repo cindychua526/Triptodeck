@@ -14,6 +14,8 @@ export function line(l) { const who = nameOf(l.user_id), me = l.user_id === api.
   if (l.action === "ACTIVATED") return `${me ? "你" : who}发动了 ${l.card} · ${c ? c.name : ""}${l.effect ? "：" + l.effect : ""}`;
   if (l.action === "DECIDED") return `${me ? "你" : who}${l.effect || "定了一件事"}`;
   if (l.action === "EFFECT") return `失控：${l.effect || ""}`;
+  if (l.action === "PLAY") return `✦ ${me ? "你" : who}${l.effect || "玩了一局"}`;
+  if (l.action === "DICE") return `🎲 ${me ? "你" : who}${l.effect || "掷了骰子"}`;
   if (l.action === "DRAWN") return `${me ? "你" : who}抽了一张牌`;
   return `${who} ${l.effect || l.action}`; }
 async function load(first) {

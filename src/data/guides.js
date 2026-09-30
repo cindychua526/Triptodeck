@@ -220,15 +220,15 @@ export const GUIDES = [
     spots: [
       S("广济桥", "Guangji Bridge", "古迹", "中国古代四大名桥之一，中间一段是用船连成的浮桥；晚上有灯光秀。", { time: "1 小时", ll: [23.6660, 116.6490] }),
       S("牌坊街", "Paifang Street", "街区", "潮州古城的主街，一座座石牌坊下面全是小吃和老店。", { time: "2 小时", ll: [23.6640, 116.6440] }),
-      S("潮州开元寺", "Kaiyuan Temple, Chaozhou", "寺庙", "唐代古刹，就在古城里。", { time: "1 小时" }),
-      S("韩文公祠", "Han Yu Memorial", "古迹", "纪念唐代文学家韩愈，面朝韩江。", { time: "1 小时" }),
+      S("潮州开元寺", "Kaiyuan Temple, Chaozhou", "寺庙", "唐代古刹，就在古城里。", { time: "1 小时", ll: [23.6693, 116.6431] }),
+      S("韩文公祠", "Han Yu Memorial", "古迹", "纪念唐代文学家韩愈，在韩江东岸的笔架山下，隔江对着古城。", { time: "1 小时", ll: [23.6615, 116.6555] }),
       S("汕头小公园 · 老市区", "Shantou Old Town", "街区", "骑楼老街和中山纪念亭，很有年代感。", { time: "2 小时" }),
       S("南澳岛", "Nan'ao Island", "海岛", "开车走跨海大桥上岛，青澳湾的海水很清。", { time: "一天" })
     ],
     foods: [
       F("潮汕牛肉火锅", "Beef Hot Pot", "现切的鲜牛肉（吊龙、匙柄、嫩肉）涮几秒，配手打牛肉丸。", "汕头、潮州的牛肉店", "潮汕人讲究吃当天的鲜牛肉，按部位切。"),
       F("卤鹅", "Braised Goose", "狮头鹅卤得入味，鹅肝鹅掌也别错过。", "澄海一带最有名", "潮汕卤鹅以澄海的狮头鹅最有名。"),
-      F("蚝烙", "Oyster Pancake", "潮汕版海蛎煎，煎得更酥。", "牌坊街、小公园", "潮汕传统海鲜小吃。"),
+      F("蚝烙", "Oyster Pancake", "鲜蚝、番薯粉和鸭蛋在猪油里煎到边缘酥脆，比闽南海蛎煎更酥，蘸鱼露吃。", "汕头 · 西天巷蚝烙；潮州牌坊街", "潮汕传统海鲜小吃，西天巷是汕头人从小吃到大的老摊。"),
       F("粿条汤", "Kway Teow Soup", "宽米粉配牛肉丸或猪杂的清汤。", "早餐店", "潮汕人把米粉叫粿条。"),
       F("潮汕肠粉", "Chaoshan Rice Rolls", "料很足的肠粉，加蛋加肉加菜脯。", "街边早餐店", "潮汕版的肠粉料特别多。"),
       F("砂锅粥", "Clay-pot Congee", "海鲜砂锅粥，夜宵首选。", "夜宵档", "潮汕人的夜宵。"),
@@ -237,10 +237,15 @@ export const GUIDES = [
     ] }
 ];
 import { GUIDES2 } from "./guides2.js";
+import { SPOT_MORE, FOOD_O } from "./guides_more.js";
 import { GUIDES3 } from "./guides3.js";
 GUIDES.push(...GUIDES2, ...GUIDES3);
 /* 2026 additions to cities that were already here */
-const add = (id, spots = [], foods = []) => { const g = GUIDES.find(x => x.id === id); if (!g) return; spots.forEach(sp => { if (!g.spots.some(x => x.n === sp.n)) g.spots.push(sp); }); foods.forEach(f => { if (!g.foods.some(x => x.n === f.n)) g.foods.push(f); }); };
+/* a later addition that is really the same place / dish (「广州塔」 vs 「广州塔 · 海心沙」) fills in what the first one was missing instead of showing twice */
+const nk = s => String(s).replace(/[（(].*?[)）]/g, "").replace(/[\s·・]/g, "");
+const same = (a, b) => { const x = nk(a), y = nk(b); return x === y || (Math.min(x.length, y.length) >= 3 && (x.includes(y) || y.includes(x))); };
+const merge = (list, it) => { const o = list.find(x => same(x.n, it.n)); if (!o) { list.push(it); return; } ["ll", "tip", "time", "where", "o", "e"].forEach(k => { if (it[k] && !o[k]) o[k] = it[k]; }); };
+const add = (id, spots = [], foods = []) => { const g = GUIDES.find(x => x.id === id); if (!g) return; spots.forEach(sp => merge(g.spots, sp)); foods.forEach(f => merge(g.foods, f)); };
 const S3 = (n, e, t, d, o = {}) => ({ n, e, t, d, ...o }), F3 = (n, e, d, where, o) => ({ n, e, d, where, o });
 add("cq", [S3("十八梯", "Shibati", "老街", "从较场口下到江边的老梯坎街区，2021 年改造后开放，保留了老重庆的街巷和吊脚楼；免费。", { tip: "晚上灯亮和洪崖洞一样好看，人少一半。", time: "1.5 小时", ll: [29.5540, 106.5760] }), S3("白象居", "Baixiangju", "地标", "1983 年设计的 24 层无电梯居民楼，几栋楼在半空用连廊连着，从连廊能拍到长江索道穿楼。", { tip: "3 号楼连廊的机位最经典；是居民楼，小声。", time: "40 分钟", ll: [29.5570, 106.5830] }), S3("山城巷", "Shancheng Lane", "老街", "保存最完整的老山城步道，沿崖边一路石梯和老房子，入选 2025 年必打卡榜。", { time: "1.5 小时", ll: [29.5560, 106.5720] }), S3("戴家巷崖壁步道", "Daijiaxiang Cliff Walk", "地标", "洪崖洞旁边的崖壁栈道，俯拍洪崖洞全景的隐藏机位。", { time: "40 分钟", ll: [29.5620, 106.5790] }), S3("鹅岭二厂 · 李子坝", "E'ling Erchang & Liziba", "街区", "1937 年的印刷厂改成的文创园，旁边就是轻轨穿楼的李子坝站。", { time: "2 小时", ll: [29.5560, 106.5390] }), S3("观音桥", "Guanyinqiao", "街区", "江北的年轻人商圈，步行街和夜市。", { time: "晚上 2 小时", ll: [29.5810, 106.5320] }), S3("武隆天生三桥", "Wulong Karst", "自然", "世界自然遗产，三座天然石桥和天坑，《变形金刚 4》取景。", { time: "一天", ll: [29.4300, 107.8000] })],
   [F3("李子坝梁山鸡", "Liangshan Chicken", "中药汤底的炖鸡，芋头粉糯。", "李子坝梁山鸡 各分店"), F3("鬼酥肉 · 玫瑰冰粉", "Crispy Pork & Rose Ice Jelly", "八一好吃街的两样：现炸酥肉和玫瑰味的冰粉。", "解放碑 八一路好吃街")]);
@@ -254,7 +259,45 @@ add("lgk", [S3("天空之桥", "Langkawi Sky Bridge", "地标", "坐缆车上山
 add("hk", [S3("西九文化区 · M+", "West Kowloon & M+", "博物馆", "海边的当代艺术馆和故宫文化博物馆，草地上看维港。", { time: "半天", ll: [22.3020, 114.1590] }), S3("深水埗", "Sham Shui Po", "街区", "布市场、鸭寮街的电子摊和老茶餐厅，现在的文艺街区。", { time: "2 小时", ll: [22.3300, 114.1620] }), S3("大澳", "Tai O", "村落", "大屿山的渔村，棚屋和虾酱。", { time: "半天", ll: [22.2540, 113.8620] })], [F3("蛋挞 · 菠萝油", "Egg Tart & Pineapple Bun", "茶餐厅的两样，热的最好。", "泰昌饼家、金华冰厅")]);
 add("gz", [S3("永庆坊 · 恩宁路", "Yongqingfang", "老街", "西关的骑楼老街改造成的文创街区，粤剧艺术博物馆在里面。", { time: "2 小时", ll: [23.1130, 113.2400] }), S3("东山口", "Dongshankou", "街区", "民国红砖洋楼和咖啡店的街区。", { time: "2 小时", ll: [23.1240, 113.2960] }), S3("广州塔 · 海心沙", "Canton Tower", "地标", "小蛮腰，晚上珠江边看灯光。", { time: "1.5 小时", ll: [23.1090, 113.3240] })], [F3("肠粉", "Rice Noodle Roll", "布拉肠，淋豉油。", "银记、华辉")]);
 add("cs2", [S3("汕头小公园", "Shantou Little Park", "老街", "骑楼环绕的老城中心，南生百货的钟楼。", { time: "2 小时", ll: [23.3620, 116.6830] }), S3("南澳岛", "Nan'ao Island", "自然", "汕头对面的海岛，环岛路和青澳湾。", { time: "一天", ll: [23.4200, 117.0200] })], [F3("汕头牛肉火锅", "Shantou Beef Hotpot", "现切的牛肉按部位涮，八秒。", "八合里、杏花吴记")]);
+/* 潮汕 · more of Chaozhou & Shantou: 出处 (where) + 介绍 (story) for every food */
+add("cs2", [
+  S3("潮州古城墙 · 广济门城楼", "Chaozhou City Wall & Guangji Gate", "古迹", "明代城墙沿韩江保存了两千多米，广济门城楼正对广济桥，登上去看江、看桥、看古城的瓦顶。", { tip: "傍晚上去，接着下来看广济桥的灯光秀。", time: "1 小时", ll: [23.6663, 116.6478] }),
+  S3("甲第巷", "Jiadi Lane", "老街", "古城里保存最完整的明清民居巷，一条巷子走下来全是「下山虎」「四点金」的老宅，门楼上有精细的石雕和嵌瓷。", { tip: "是住家，小声一点；早上光线最好。", time: "1 小时", ll: [23.6690, 116.6420] }),
+  S3("己略黄公祠", "Jilue Huang Ancestral Hall", "古迹", "清代祠堂，以潮州木雕出名——梁上金漆木雕层层镂空，被称为「潮州木雕一绝」。", { time: "40 分钟", ll: [23.6660, 116.6390] }),
+  S3("许驸马府", "Xu Fuma Mansion", "古迹", "北宋驸马许珏的府第，是全国少有的宋代府第建筑，格局保存了近千年。", { time: "40 分钟", ll: [23.6700, 116.6430] }),
+  S3("龙湖古寨", "Longhu Ancient Village", "村落", "潮安区的宋代古寨，一条直街两边是祠堂、府第和书斋，被叫作「潮汕古民居博物馆」。", { tip: "从潮州古城打车约 30 分钟，人少很安静。", time: "半天", ll: [23.5580, 116.6600] }),
+  S3("凤凰山 · 单丛茶园", "Fenghuang Mountain Tea", "自然", "潮州北边的高山茶区，凤凰单丛的故乡；乌岽山上有几百年树龄的老茶树。", { tip: "上山路弯，建议包车；茶农家可以试茶。", time: "一天", ll: [23.9300, 116.6200] }),
+  S3("韩江夜游", "Han River at Night", "体验", "坐船从湘子桥下经过，两岸城墙和广济楼亮灯，是看潮州夜景最舒服的方式。", { time: "1 小时", ll: [23.6650, 116.6500] }),
+  S3("陈慈黉故居", "Chen Cihong Residence", "古迹", "汕头澄海前美村，泰国侨商陈慈黉家族建的大宅，五百多间房，中西合璧，被称为「岭南第一侨宅」。", { tip: "从汕头市区开车约 40 分钟，可以和澄海卤鹅排在同一天。", time: "2 小时", ll: [23.5140, 116.8250] }),
+  S3("汕头开埠文化陈列馆", "Shantou Opening-up Museum", "博物馆", "小公园旁的老洋楼里，讲汕头 1860 年开埠、红头船下南洋的历史。", { time: "1 小时", ll: [23.3590, 116.6800] }),
+  S3("侨批文物馆", "Qiaopi Museum", "博物馆", "侨批是下南洋的潮汕人寄回家的「银信」，一封信加一笔钱；这里收藏了几万封，已列入世界记忆遗产。", { time: "1 小时", ll: [23.3570, 116.6740] }),
+  S3("礐石风景区", "Queshi Scenic Area", "自然", "汕头南岸的石头山，山上看整个汕头港和海湾大桥，坐轮渡过去就是一次小旅行。", { tip: "从市区坐轮渡过海，比开车有意思。", time: "半天", ll: [23.3300, 116.7000] }),
+  S3("樟林古港", "Zhanglin Ancient Port", "古迹", "澄海的古港，清代「红头船」从这里出海下南洋，是潮汕人闯南洋的起点。", { time: "1 小时", ll: [23.5300, 116.8200] })
+], [
+  F3("手打牛肉丸", "Hand-beaten Beef Balls", "牛腿肉用两根铁棒反复捶打成浆，丸子弹到能在桌上跳，有牛筋丸和牛肉丸两种。", "汕头 · 福合埕、海记等老牌牛肉丸店", "潮汕牛肉丸据说是清末客家人把牛肉丸带到潮汕，再被汕头人改成「捶」的做法；火锅、粿条汤里都少不了它。"),
+  F3("生腌", "Raw Soy-marinated Seafood", "虾蛄、血蚶、螃蟹、蚝用酱油、蒜、辣椒、芫荽生腌，冰凉咸鲜，被叫作「潮汕毒药」。", "汕头夜宵档、海鲜排档", "潮汕靠海，渔民为了保存海鲜发明的吃法；肠胃敏感的先少吃一点。"),
+  F3("老妈宫粽球", "Laomagong Zongqiu", "潮汕人把粽子叫粽球，一只里面有咸有甜：五花肉、咸蛋黄、香菇、虾米，另一半是绿豆沙或芋泥。", "汕头老市区 · 老妈宫（妈祖庙）对面的老店", "老妈宫是汕头开埠前就有的妈祖庙，庙前的粽球店开了近百年，成了这个名字。"),
+  F3("红桃粿", "Red Peach Kueh", "粉红的米皮捏成桃子形，里面是糯米饭、花生、香菇、虾米，蒸好再煎一下最好吃。", "潮州牌坊街、菜市场的粿店", "潮汕人拜神、过节一定要做，桃形代表长寿；潮汕人说「时年八节」都离不开粿。"),
+  F3("鼠壳粿", "Cudweed Kueh", "用鼠曲草揉进糯米皮，颜色墨绿，包咸的绿豆沙或甜豆沙。", "潮州古城粿店", "清明前后鼠曲草最嫩，潮汕人用它做粿祭祖，有清香草味。"),
+  F3("韭菜粿", "Chive Kueh", "透明的薯粉皮包满韭菜，蒸完再煎到底部焦脆，蘸辣椒酱。", "街边早餐粿档", "潮汕最日常的早餐粿之一。"),
+  F3("普宁炸豆干", "Puning Fried Tofu", "现炸的豆干外皮金黄起泡，里面嫩得像豆花，蘸韭菜盐水吃。", "潮汕各地小吃店，出处是揭阳普宁", "普宁豆干用当地的井水和老卤水点豆腐，「普宁豆干」已经成了潮汕地区一个响当当的招牌。"),
+  F3("鱼饭", "Cold Poached Fish", "新鲜海鱼用海水或盐水煮熟、放凉，整条摆在竹筐里，蘸普宁豆酱吃。", "汕头、南澳的海鲜档", "渔民出海时把鱼煮熟保存的方法，冷吃反而更鲜，潮汕人吃鱼饭像吃「饭」一样日常。"),
+  F3("潮州春饼", "Chaozhou Spring Roll", "薄皮包绿豆沙、猪肉、香菇、虾米，炸到金黄酥脆。", "潮州 · 胡荣泉（太平路 / 牌坊街）", "胡荣泉是潮州百年老字号，春饼、鸭母捻、腐乳饼都是它的招牌。"),
+  F3("腐乳饼", "Fermented Tofu Pastry", "酥皮里是冬瓜糖、芝麻和南乳做的馅，甜里带一点咸香。", "潮州 · 胡荣泉、老香黄店", "潮州传统饼食，逢年过节送礼用，是潮州伴手礼的首选之一。"),
+  F3("护国菜", "Huguo Vegetable Soup", "番薯叶（或菠菜）做成碧绿的羹，加上汤和火腿末，看着朴素，喝起来很鲜。", "潮州菜馆（潮菜宴席必点）", "传说南宋末年小皇帝赵昺逃到潮州，寺里的僧人只能用番薯叶煮汤给他，他喝完说「护国有功」，从此叫护国菜。"),
+  F3("落汤钱", "Luotang Qian", "糯米团子煮熟后滚上花生、芝麻和糖粉，软糯香甜。", "牌坊街甜品档", "潮州传统甜点，圆圆的像铜钱，寓意「钱落汤中」，过年吃讨个吉利。"),
+  F3("草粿", "Chaoshan Grass Jelly", "仙草熬成的黑色冻，切一碗加白糖或糖水，夏天冰着吃，冬天热着吃。", "街边甜汤档", "潮汕人认为草粿能「退火」，是夏天最常吃的一碗。"),
+  F3("甘草水果", "Licorice-salted Fruit", "番石榴、芒果、菠萝、杨桃切块，撒甘草粉、梅子粉或蘸酱油膏，酸甜咸都有。", "汕头、潮州的街边水果摊", "潮汕街头独有的吃水果方法，边走边吃。"),
+  F3("潮州三宝 · 老香黄", "Aged Buddha's Hand", "佛手果用糖和盐反复腌制多年，颜色越放越黑，切一片泡水喝，甘香解腻。", "潮州 · 牌坊街的老香黄、老药桔店", "老香黄、黄皮豉、老药桔合称「潮州三宝」，老一辈潮州人家里都会存几罐，胃不舒服就泡一杯。"),
+  F3("凤凰单丛", "Fenghuang Dancong Tea", "潮州凤凰山的乌龙茶，一株树单独采制，有蜜兰香、鸭屎香、芝兰香等十几种香型。", "凤凰山茶农家、潮州古城茶铺", "传说南宋末年宋帝南逃经过凤凰山，口渴时侍从采了这里的茶叶，后人称它「宋种」；至今乌岽山还有几百年的老茶树。"),
+  F3("爱西干面", "Aixi Dry Noodles", "汕头老牌干面，碱水面拌沙茶酱、猪油和香油，再配一碗猪杂汤。", "汕头老市区 · 爱西干面", "汕头人从小吃到大的老味道，早上排队的都是街坊。")
+]);
+/* fill the gaps (map pins, tips, the story of each dish) from guides_more.js — never overwrites what a guide already says */
+GUIDES.forEach(g => { const more = SPOT_MORE[g.id] || {}; g.spots.forEach(sp => { const m = more[sp.n]; if (!m) return; if (m.ll && !sp.ll) sp.ll = m.ll; if (m.tip && !sp.tip) sp.tip = m.tip; });
+  g.foods.forEach(f => { if (!f.o && FOOD_O[f.n]) f.o = FOOD_O[f.n]; }); });
 export const COUNTRIES = ["中国", "马来西亚", "新加坡", "泰国", "韩国", "日本", "台湾", "越南", "新西兰"];
 export const GUIDE_BY_ID = Object.fromEntries(GUIDES.map(g => [g.id, g]));
 export const GUIDE_BY_NAME = Object.fromEntries(GUIDES.map(g => [g.name, g]));
+/* people write the city either way: 潮州 / 汕头 / 潮州市 all open the 潮汕 guide */
+["潮州", "潮州市", "汕头", "汕头市", "潮汕地区", "揭阳", "南澳"].forEach(n => { if (!GUIDE_BY_NAME[n] && GUIDE_BY_ID.cs2) GUIDE_BY_NAME[n] = GUIDE_BY_ID.cs2; });
 export const guideFor = key => GUIDE_BY_ID[key] || GUIDE_BY_NAME[key] || null;
