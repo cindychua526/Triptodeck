@@ -5,7 +5,7 @@
    Nothing here changes data; it only changes how today looks and sounds. */
 import { api, on } from "./api.js";
 import { today, hash, buzz } from "./util.js";
-import { mus, sfx } from "./sound.js";
+import { mus, sfx, ambient, ambientLevel, stopAmbient } from "./sound.js";
 import { tripDays } from "../pages/trip.js";
 
 export const ATMOS = {
@@ -37,21 +37,40 @@ export async function refresh() { const a = api.trip ? await todaysAtmos() : nul
 function apply(a) {
   if (a === current) return; current = a;
   document.body.classList.remove("atm-rain", "atm-snow", "atm-dusk", "atm-night", "atm-fire"); if (a) document.body.classList.add("atm-" + a);
-  stop(); if (a === "rain" || a === "snow") start(a);
+  stop(); if (a === "rain" || a === "snow") start(a); else if (a) { ambient(a); soundOnly(); }
   if (a === "rain") { setTimeout(() => { buzz([40, 60, 80]); mus.whoosh(); }, 300); }
   if (a === "snow") { setTimeout(() => { buzz([8, 60, 8]); try { mus.chime(6, .02); mus.chime(9, .015, .2); } catch (e) {} }, 300); }
   document.dispatchEvent(new CustomEvent("atmos", { detail: a }));
 }
+/* rain / snow: full on the 今日 page, only a light sprinkle elsewhere (so it never covers what you're reading),
+   paused while the app is in the background, and much lighter on slow phones or when "reduce motion" / data saver is on */
+export const LOW_POWER = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches || (navigator.connection && navigator.connection.saveData) || (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 3; } catch (e) { return false; } })();
+if (typeof document !== "undefined" && LOW_POWER) { const on = () => document.body && document.body.classList.add("lowpower"); document.body ? on() : addEventListener("DOMContentLoaded", on); }
 function start(kind) {
   canvas = document.createElement("canvas"); canvas.className = "atm-cv"; document.body.appendChild(canvas);
-  const x = canvas.getContext("2d"); let w = 0, h = 0; const size = () => { w = canvas.width = innerWidth; h = canvas.height = innerHeight; }; size(); addEventListener("resize", size);
-  parts = Array.from({ length: kind === "snow" ? 110 : 140 }, () => ({ x: Math.random() * innerWidth, y: Math.random() * innerHeight, v: kind === "snow" ? .5 + Math.random() * 1 : 7 + Math.random() * 6, r: kind === "snow" ? 1.6 + Math.random() * 3 : 0, d: Math.random() * 6.28 }));
-  let t = 0; const loop = () => { t += .016; x.clearRect(0, 0, w, h);
-    if (kind === "snow") { x.fillStyle = "rgba(255,255,255,.95)"; x.shadowColor = "rgba(255,255,255,.6)"; x.shadowBlur = 4; parts.forEach(p => { p.y += p.v; p.x += Math.sin(t + p.d) * .3; if (p.y > h) { p.y = -4; p.x = Math.random() * w; } x.beginPath(); x.arc(p.x, p.y, p.r, 0, 7); x.fill(); }); }
-    else { x.strokeStyle = "rgba(47,58,46,.38)"; x.lineWidth = 1.2; parts.forEach(p => { p.y += p.v; p.x -= 1.2; if (p.y > h) { p.y = -14; p.x = Math.random() * w + 40; } x.beginPath(); x.moveTo(p.x, p.y); x.lineTo(p.x - 3, p.y + 18); x.stroke(); }); }
-    raf = requestAnimationFrame(loop); }; raf = requestAnimationFrame(loop);
+  const x = canvas.getContext("2d"); let w = 0, h = 0; const size = () => { if (!canvas) return; w = canvas.width = innerWidth; h = canvas.height = innerHeight; }; size(); addEventListener("resize", size);
+  const N = Math.round((kind === "snow" ? 90 : 110) * (LOW_POWER ? .35 : 1));
+  parts = Array.from({ length: N }, (_, i) => ({ i, x: Math.random() * innerWidth, y: Math.random() * innerHeight, v: kind === "snow" ? .4 + Math.random() * .9 : 7 + Math.random() * 6, r: kind === "snow" ? 1.2 + Math.random() * 2.2 : 0, d: Math.random() * 6.28 }));
+  let t = 0, last = 0, lvl = -1; ambient(kind);
+  const loop = ts => { raf = requestAnimationFrame(loop);
+    if (document.hidden) return; if (LOW_POWER && ts - last < 33) return; last = ts;   // ~30fps on slow phones
+    t += .016; x.clearRect(0, 0, w, h);
+    const today = !!document.querySelector("#pg-fortune.on"), busy = !!document.querySelector(".usheet.on, .sheet.on, .fb, .sv, .npo, .shp, .showcase.on, .rcpt");
+    const share = busy ? 0 : today ? 1 : .3, n = Math.round(parts.length * share);
+    const al = busy ? .35 : today ? 1 : .45; if (al !== lvl) { lvl = al; ambientLevel(al); }
+    if (!n) return;
+    if (kind === "snow") { x.fillStyle = today ? "rgba(255,255,255,.95)" : "rgba(255,255,255,.8)"; x.shadowColor = "rgba(110,130,150,.35)"; x.shadowBlur = 3;
+      for (let k = 0; k < n; k++) { const p = parts[k]; p.y += p.v; p.x += Math.sin(t + p.d) * .3; if (p.y > h) { p.y = -4; p.x = Math.random() * w; } x.beginPath(); x.arc(p.x, p.y, today ? p.r : p.r * .75, 0, 7); x.fill(); } }
+    else { x.strokeStyle = today ? "rgba(47,58,46,.34)" : "rgba(47,58,46,.2)"; x.lineWidth = 1.1;
+      for (let k = 0; k < n; k++) { const p = parts[k]; p.y += p.v; p.x -= 1.2; if (p.y > h) { p.y = -14; p.x = Math.random() * w + 40; } x.beginPath(); x.moveTo(p.x, p.y); x.lineTo(p.x - 3, p.y + 18); x.stroke(); } }
+  };
+  raf = requestAnimationFrame(loop);
 }
-function stop() { cancelAnimationFrame(raf); if (canvas) { canvas.remove(); canvas = null; } }
+/* dusk / night / fire have no particles, only sound: keep its level in step with the page you're on */
+let sIv = 0;
+function soundOnly() { clearInterval(sIv); let lvl = -1; sIv = setInterval(() => { const today = !!document.querySelector("#pg-fortune.on"), busy = !!document.querySelector(".usheet.on, .fb, .sv, .npo, .shp, .showcase.on, .rcpt, .rc");
+  const al = busy ? .35 : today ? 1 : .45; if (al !== lvl) { lvl = al; ambientLevel(al); } }, 700); }
+function stop() { clearInterval(sIv); stopAmbient(); cancelAnimationFrame(raf); if (canvas) { canvas.remove(); canvas = null; } }
 /* 祝融: a little firework when something gets done on the last day */
 export function celebrate() {
   if (current !== "fire") return;

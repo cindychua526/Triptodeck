@@ -30,6 +30,11 @@ export function cardHTML(k, o = {}) {
 }
 const backHTML = (i, extra = "") => `<div class="ocard" style="--i:${i}${extra}">${CARD_BACK}</div>`;
 
+async function refreshBelow() {
+  try { [table, effects, logs] = await Promise.all([api.deckTable(date), api.effects(), api.log()]); } catch (e) { return; }
+  const root = $("deckRoot"); if (!root) return; const keepAct = $("dkAct") && $("dkAct").innerHTML;
+  render(); if (keepAct && $("dkAct")) { $("dkAct").innerHTML = keepAct; wire(root); }
+}
 export async function refresh() {
   date = today();
   try { [mine, table, effects, logs] = await Promise.all([api.myDraw(date), api.deckTable(date), api.effects(), api.log()]); } catch (e) { console.warn(e); }
@@ -55,7 +60,7 @@ function render() {
         <div class="odeck">${Array.from({ length: Math.min(left, 7) }, (_, i) => backHTML(i)).join("")}</div>
       </div><p class="o-hint" id="oHint">按住牌堆不放，等圆圈转满（约两秒），心里想着今天的旅程……</p><p class="o-left">牌堆里还剩 ${left} 张</p>`
       : `<p class="empty">今天的牌都被请走了，明天再来。</p>`;
-  } else h += `<div class="my-card" id="myCard">${cardHTML(mine.card, { state: stateOf(mine), cls: "hero powered" })}</div><p class="o-hint"><b>${CARD[mine.card].myth}</b>　${CARD[mine.card].mythEn}</p>`;
+  } else h += `<div class="my-card" id="myCard">${cardHTML(mine.card, { state: stateOf(mine), cls: "hero powered" })}</div><p class="o-hint"><b>${CARD[mine.card].myth}</b><span class="en-only">　${CARD[mine.card].mythEn}</span></p>`;
   h += `</div><div id="dkAct">${mine && !loading ? actionsHTML() : ""}</div>`;
   const tFx = effects.filter(e => e.target_date === date && e.card !== "X"), mFx = effects.filter(e => e.target_date === tomorrow() && e.card !== "X");
   if (tFx.length) h += `<div class="sk-sec-h">TODAY'S EFFECTS <b>今天生效的失控</b></div>` + tFx.map(e => fxHTML(e)).join("");
@@ -130,6 +135,8 @@ async function doDraw(el) {
   await wait(REDUCE ? 0 : 2300); c.classList.remove("transforming", "flipping"); c.classList.add("powered"); sfx.reveal();
   $("oHint").innerHTML = `<b>${s.myth}</b> 降临 —— 你抽到了 <b>${s.key} · ${s.name}</b>`;
   busy = false; $("dkAct").innerHTML = actionsHTML(); wire($("deckRoot"));
+  /* the table and the log below were skipped while the card was being revealed: bring them up to date */
+  setTimeout(() => { if (!busy) refreshBelow(); }, 400);
   setTimeout(refresh, 2200);
 }
 

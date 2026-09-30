@@ -36,6 +36,7 @@ function bookHTML(t, cur, photo, idx, origin, tstamps = []) {
       <span class="fd-stamp">${g ? postageStamp(g.spots[0] ? g.spots[0].n : g.name, g.name, t.start_date) : ""}</span>
     </span>
     ${cur ? `<span class="fd-now">${T("正在看", "OPEN")}</span>` : ""}
+    <span class="fd-deco" role="button" tabindex="0" data-deco="${t.id}">🎨 ${T("装饰", "Decorate")}</span>
   </button>`;
 }
 export async function openShelf() {
@@ -66,7 +67,12 @@ export async function openShelf() {
     if (b.dataset.trip !== cur) await api.switchTrip(b.dataset.trip);
     setTimeout(close, 700);
   });
-  const deco = el.querySelector("[data-act=deco]"); if (deco) deco.onclick = e => { e.stopPropagation(); openDeco(el); };
+  const byId = id => trips.find(x => x.id === id);
+  const target = () => { const p = el.querySelector(".fold.pulled"); return byId(p ? p.dataset.trip : cur) || byId(cur) || trips[0]; };
+  const deco = el.querySelector("[data-act=deco]"); if (deco) deco.onclick = e => { e.stopPropagation(); const t = target(); if (t) openDeco(el, t); };
+  el.querySelectorAll("[data-deco]").forEach(d => { const go = e => { e.stopPropagation(); e.preventDefault(); const t = byId(d.dataset.deco); if (t) openDeco(el, t); }; d.onclick = go; d.onkeydown = e => { if (e.key === "Enter" || e.key === " ") go(e); }; });
+  const relabel = () => { const t = target(); if (deco && t) deco.textContent = T(`装饰「${t.name}」`, `Decorate "${t.name}"`); };
+  relabel(); el.addEventListener("click", () => setTimeout(relabel, 30));
   bind(el, { new: () => { close(); newTripForm(); }, close, join: async () => { const c = $("shCode").value.trim(); if (!c) return; try { await api.joinTrip(c); close(); import("../lib/motion.js").then(m => m.playMotion("needle", { text: `你加入了「${api.trip.name}」\n线穿过针眼，旅伴们连在一起了。` })); } catch (e) { toast(/NOT_FOUND/.test(e.message) ? "找不到这个邀请码" : /PRIVATE/.test(e.message) ? "这是别人的个人旅行，不能加入" : "没能加入：" + e.message); } } });
 }
 export const openTrips = openShelf;
@@ -88,7 +94,7 @@ export function newTripForm(opts = {}) {
       <div class="lbl">去哪里 · 可以多选</div>
       ${cities.length ? `<div class="picked">${cities.map(c => `<button class="pk" data-rm="${esc(c)}">${esc(nameOfCity(c))} ×</button>`).join("")}</div>` : ""}
       <input class="inp" id="ntQ" placeholder="搜城市，或者直接写一个新的" value="${esc(q)}">
-      ${q && !GUIDES.some(g => g.name === q) ? `<button class="btn sm" data-act="addCity" style="margin-top:8px">＋ 加入「${esc(q)}」（没有攻略，也可以自己写）</button>` : ""}
+      ${q && !GUIDES.some(g => g.name === q || g.name.includes(q) || g.en.toLowerCase().includes(q.toLowerCase())) ? `<button class="btn sm" data-act="addCity" style="margin-top:8px">＋ 加入「${esc(q)}」（没有攻略，也可以自己写）</button>` : ""}
       <div class="city-pick">${groups.map(([c, l]) => `<div class="cp-g"><small>${esc(c)}</small><div class="cp-list">${l.map(g => `<button class="cp${cities.includes(g.id) ? " on" : ""}" data-city="${g.id}" style="--c:${g.color}"><b>${esc(g.name)}</b><em>${esc(g.en)}</em></button>`).join("")}</div></div>`).join("")}</div>
       <div class="addrow"><label class="lbl" style="flex:1;margin:0">出发<input class="inp" type="date" id="ntStart" value="${keep.start}"></label><label class="lbl" style="flex:1;margin:0">回来<input class="inp" type="date" id="ntEnd" value="${keep.end}"></label></div>
       <label class="lbl">预算（RM）<input class="inp" id="ntBudget" inputmode="decimal" value="${keep.budget}"></label>
@@ -97,7 +103,7 @@ export function newTripForm(opts = {}) {
     const open = document.querySelector(".usheet.on");
     const sh = open ? setSheet(html) : openSheet(html, { accent: "#3a2c1f" });
     sh.querySelectorAll("[data-kind]").forEach(b => b.onclick = () => { kind = b.dataset.kind; draw(); });
-    sh.querySelectorAll("[data-city]").forEach(b => b.onclick = () => { const c = b.dataset.city; cities = cities.includes(c) ? cities.filter(x => x !== c) : [...cities, c]; sfx.tap(); draw(); });
+    sh.querySelectorAll("[data-city]").forEach(b => b.onclick = () => { const c = b.dataset.city; cities = cities.includes(c) ? cities.filter(x => x !== c) : [...cities, c]; q = ""; sfx.tap(); draw(); });
     sh.querySelectorAll("[data-rm]").forEach(b => b.onclick = () => { cities = cities.filter(x => x !== b.dataset.rm); draw(); });
     const qi = $("ntQ"); qi.oninput = () => { q = qi.value.trim(); const pos = qi.selectionStart; draw(); const n = $("ntQ"); n.focus(); n.setSelectionRange(pos, pos); };
     const fjBox = $("ntFj"); if (fjBox) fjBox.onchange = () => { template = fjBox.checked ? "fujian" : null; if (template) { $("ntStart").value = FUJIAN_TEMPLATE.start; $("ntEnd").value = FUJIAN_TEMPLATE.end; if (!$("ntName").value) $("ntName").value = FUJIAN_TEMPLATE.name; $("ntBudget").value = FUJIAN_TEMPLATE.budget; } };
@@ -118,22 +124,22 @@ export function newTripForm(opts = {}) {
 export const BOOK_COLORS = [["gold", "金黄", "#e8c86a", "#d0a43a"], ["rose", "玫红", "#f074b0", "#d8468e"], ["ink", "墨黑", "#3a3632", "#141210"], ["moss", "墨绿", "#5c7a55", "#2f3a2e"], ["sky", "天青", "#9fc4e0", "#5f8fb0"], ["plum", "紫藤", "#a58ac4", "#6a4a8a"], ["sand", "米沙", "#e9dcc4", "#c8b48e"], ["clay", "赭土", "#d08a6a", "#a05a3a"]];
 export const BOOK_PATS = [["plain", "素面"], ["tape", "纸胶带"], ["stripe", "条纹"], ["dot", "圆点"], ["grid", "方格"]];
 export function bookLook(id) { try { const v = JSON.parse(localStorage.getItem("td-book:" + id) || "null"); if (v) return v; } catch (e) {} return { c: localStorage.getItem("td-pouch") || "gold", p: "plain" }; }
-function openDeco(el) {
-  const id = api.trip && api.trip.id; if (!id) return; const L = bookLook(id);
-  const sh = openSheet(`<div class="as"><small class="as-k">DECORATE</small><h3>${T("装饰这一本", "Decorate this book")}</h3>
+function openDeco(el, trip) {
+  const tr = trip || api.trip, id = tr && tr.id; if (!id) return; const L = bookLook(id);
+  const sh = openSheet(`<div class="as"><small class="as-k">DECORATE</small><h3>${T("装饰这一本", "Decorate this book")}</h3><p class="deco-name">${esc(tr.name)}</p>
     <p class="as-hint">${T("只改这一趟旅行的封面，其他本不动。", "Only this trip's cover.")}</p>
     <div class="lbl">${T("颜色", "Colour")}</div><div class="deco-colors">${BOOK_COLORS.map(([k, n, a, b]) => `<button class="dc${L.c === k ? " on" : ""}" data-c="${k}" style="background:linear-gradient(135deg,${a},${b})" aria-label="${n}"></button>`).join("")}</div>
     <div class="lbl" style="margin-top:12px">${T("花纹", "Pattern")}</div><div class="chips-wrap">${BOOK_PATS.map(([k, n]) => `<button class="chip sm${L.p === k ? " on" : ""}" data-p="${k}">${n}</button>`).join("")}</div>
     <div class="lbl" style="margin-top:14px">${T("排序和归档", "Order & archive")}</div><div class="chips-wrap"><button class="chip sm${bookMeta(id).pin ? " on" : ""}" data-m="pin">📌 ${T("放在最前面", "Pin to front")}</button><button class="chip sm${bookMeta(id).arch ? " on" : ""}" data-m="arch">${T("归档（放到最后，随时能打开看）", "Archive")}</button></div>
     <p class="as-hint">${T("没置顶的按：进行中 → 还没出发 → 已完成 → 已归档。", "Unpinned: ongoing, upcoming, done, archived.")}</p>
     <div class="as-btns"><button class="btn ink full" data-act="close">${T("好了", "Done")}</button>
-      <button class="btn full del-book" data-act="delbook">${api.mode === "local" || (api.trip && api.trip.created_by === api.me.id) ? T("删除这一本", "Delete this book") : T("离开这一本（从我的档案拿掉）", "Leave this book")}</button></div></div>`);
+      <button class="btn full del-book" data-act="delbook">${api.mode === "local" || tr.created_by === api.me.id ? T("删除这一本", "Delete this book") : T("离开这一本（从我的档案拿掉）", "Leave this book")}</button></div></div>`);
   sh.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { const M = bookMeta(id); M[b.dataset.m] = !M[b.dataset.m]; localStorage.setItem("td-bookmeta:" + id, JSON.stringify(M)); b.classList.toggle("on", !!M[b.dataset.m]); sfx.tap(); });
   const save = () => { localStorage.setItem("td-book:" + id, JSON.stringify(L)); const f = el.querySelector(`.fold[data-trip="${id}"]`); if (f) { f.className = f.className.replace(/\bp-\w+/, "p-" + L.c).replace(/\bpat-\w+/, "pat-" + L.p); } };
   sh.querySelectorAll("[data-c]").forEach(b => b.onclick = () => { L.c = b.dataset.c; sh.querySelectorAll("[data-c]").forEach(x => x.classList.toggle("on", x === b)); sfx.tap(); save(); });
   sh.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { L.p = b.dataset.p; sh.querySelectorAll("[data-p]").forEach(x => x.classList.toggle("on", x === b)); sfx.tap(); save(); });
   bind(sh, { close: () => { closeSheet(); openTrips(); },
-    delbook: async () => { const t = api.trip, owner = api.mode === "local" || t.created_by === api.me.id, group = api.mode === "cloud" && t.kind !== "solo" && api.members.length > 1;
+    delbook: async () => { const t = tr, owner = api.mode === "local" || t.created_by === api.me.id, group = api.mode === "cloud" && t.kind !== "solo" && (t.id !== (api.trip && api.trip.id) || api.members.length > 1);
       const msg = owner ? (group ? `删除「${t.name}」？\n\n这是你建的旅行，删除后房间里所有人的这一本都会消失：行程、打卡、邮票、账本、照片全部删掉，不能恢复。\n\n只想自己不看，可以用「归档」。` : `删除「${t.name}」？里面的行程、打卡、账本、照片全部删掉，不能恢复。`) : `离开「${t.name}」？\n\n只是从你的档案里拿掉，旅伴那边不受影响。你打过的卡和记的账会留在房间里。`;
       if (!await askConfirm(msg)) return; if (owner && group && await askText(`确认删除，请输入旅行名字「${t.name}」`) !== t.name) return toast(T("名字不对，没有删", "Name didn't match"));
       try { if (owner) await api.deleteTrip(t.id); else await api.leaveTripById(t.id); try { localStorage.removeItem("td-book:" + t.id); localStorage.removeItem("td-bookmeta:" + t.id); } catch (e) {} closeSheet(); toast(owner ? T("删掉了", "Deleted") : T("离开了", "Left")); setTimeout(() => openTrips(), 300); } catch (e) { toast(T("没能删：", "Couldn't: ") + e.message); } } });

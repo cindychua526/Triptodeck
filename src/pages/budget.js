@@ -62,7 +62,7 @@ export function render() {
   const byDate = {}; daily().forEach(e => (byDate[e.date] = byDate[e.date] || []).push(e));
   const st = settlement();
   const tag = e => e.shared === false ? `<em class="xt personal">个人</em>` : G ? `<em class="xt">共同 · ${partsOf(e).length} 人平分</em>` : "";
-  root.innerHTML = `<div class="tp-top"><div><small>${esc(api.trip.name)} · ${G ? `共同开销大家都看得到，个人开销只有你看得到` : "只有你看得到"}</small><h2>账本</h2></div><button class="icon-btn" data-act="cfg" aria-label="预算设置">⚙︎</button></div>
+  root.innerHTML = `<div class="tp-top"><div><small>${esc(api.trip.name)} <button class="bg-info" data-act="info" aria-label="谁看得到">ⓘ</button></small><h2>账本</h2></div><button class="icon-btn" data-act="cfg" aria-label="预算设置">⚙︎</button></div>
     <div class="bg-hero kraft">
       <svg class="ring" viewBox="0 0 120 120"><circle cx="60" cy="60" r="${R}" class="bg"/><circle cx="60" cy="60" r="${R}" class="fg${rem < 0 ? " over" : ""}" style="stroke-dasharray:${C};stroke-dashoffset:${C * (1 - pct)}"/></svg>
       <div class="bg-num"><small>${d === today() ? "今天" : "Day 1"} · ${shortDate(d)} 你还可以花</small><b>${money(rem)}</b><span>今日可用 ${money(av)} · 你已花 ${money(sp)}</span></div>
@@ -100,7 +100,7 @@ export function render() {
   root.querySelectorAll("[data-mode]").forEach(b => b.onclick = async () => { sfx.tap(); try { await api.updateBudget({ budget_mode: b.dataset.mode }); } catch (e) { toast("没能保存"); } render(); });
   root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const e = exps.find(x => x.id === b.dataset.edit); if (e) openAdd({ edit: e }); });
   root.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!await askConfirm("删除这一笔？")) return; try { await api.deleteExpense(b.dataset.del); } catch (e) { toast("没能删除"); } });
-  bind(root, { add: () => openAdd({ date: d }), cfg: openCfg, addPre: () => openAdd({ date: d, pre: true }), import: openImport });
+  bind(root, { info: () => toast(G ? "共同开销大家都看得到，个人开销只有你看得到" : "这本账只有你看得到"), add: () => openAdd({ date: d }), cfg: openCfg, addPre: () => openAdd({ date: d, pre: true }), import: openImport });
 }
 /* 今天 / 结算 / 全部: the ledger is long, so it is shown one part at a time */
 let bTab = (() => { try { return sessionStorage.getItem("td-btab") || "today"; } catch (e) { return "today"; } })();
@@ -123,7 +123,7 @@ export function openAdd(opts = {}) {
   const days = tripDays(), c = cfg(), G = group();
   const E = opts.edit || null; if (E) { opts.pre = !!E.prepaid; opts.category = E.category; opts.note = E.note || ""; opts.date = E.date; opts.shared = E.shared !== false; }
   const curOpts = [...new Set([localCurOf(opts.date || (E && E.date) || days[0]), homeCur(c), BASE])];
-  let cur = E ? (E.currency || BASE) : opts.pre ? homeCur(c) : curOpts[0], catK = opts.category || (opts.pre ? "Flight" : "Food"), shared = opts.shared != null ? opts.shared : (G && !["Shopping"].includes(catK)), parts = E && E.participants ? E.participants : api.members.map(m => m.id);
+  let cur = E ? (E.currency || BASE) : opts.currency || (opts.pre ? homeCur(c) : curOpts[0]), catK = opts.category || (opts.pre ? "Flight" : "Food"), shared = opts.shared != null ? opts.shared : (G && !["Shopping"].includes(catK)), parts = E && E.participants ? E.participants : api.members.map(m => m.id);
   const isPoolIn = catK === "Pool"; let paidFrom = E ? (E.paid_from || "me") : opts.pre ? "pool" : "me", photo = null, payer = E ? (E.payer_id || E.user_id) : api.me.id;
   const sh = openSheet(`<div class="as"><small class="as-k">${opts.pre ? "PREPAID" : isPoolIn ? "POOL" : "NEW EXPENSE"}</small><h3>${E ? "改这一笔" : opts.pre ? "加一笔预付" : isPoolIn ? T("投入公费池", "Put money in the pool") : "记一笔"}</h3>
     ${isPoolIn ? `<p class="as-hint">${T("投进池子的钱不算你的花费，结算时会算回来。", "Money in the pool isn't spending; it comes back at settle-up.")}</p>` : ""}
@@ -136,7 +136,7 @@ export function openAdd(opts = {}) {
     ${opts.pre || (G && shared) ? `<label class="lbl">${T("分给几个人（留空 = 房间里所有人）", "Split among how many (blank = everyone)")}<input class="inp" id="exSplitN" type="number" inputmode="numeric" min="1" placeholder="${api.members.length}" value="${E && E.split_n ? E.split_n : ""}"></label>` : ""}
     ${!isPoolIn ? `<div class="seg" id="exPaid"><button class="${paidFrom === "me" ? "on" : ""}" data-pf="me">${T("我垫付", "I paid")}</button><button class="${paidFrom === "pool" ? "on" : ""}" data-pf="pool">${T("从公费池付", "Paid from pool")}</button></div>` : ""}
     ${!isPoolIn && !opts.pre ? `<label class="ex-photo" id="exPhoto"><input type="file" accept="image/*" hidden><span>${ic("camera")} ${T("拍一张（大家在美食票里都能看到）", "Add a photo (everyone sees it on the food ticket)")}</span></label>` : ""}
-    <div class="addrow"${opts.pre ? " hidden" : ""}><select class="inp" id="exDate">${days.map((x, i) => `<option value="${x}"${x === (opts.date || days[0]) ? " selected" : ""}>Day ${i + 1} · ${shortDate(x)}</option>`).join("")}</select><input class="inp" id="exNote" maxlength="30" placeholder="备注，比如：沙茶面" value="${esc(opts.note || "")}"></div>
+    <div class="addrow"${opts.pre ? " hidden" : ""}><select class="inp" id="exDate">${days.map((x, i) => `<option value="${x}"${x === (opts.date || days[0]) ? " selected" : ""}>${T(`第${i + 1}天`, `Day ${i + 1}`)} · ${shortDate(x)}</option>`).join("")}</select><input class="inp" id="exNote" maxlength="30" placeholder="备注，比如：沙茶面" value="${esc(opts.note || "")}"></div>
     ${opts.pre ? `<input class="inp" id="exNote2" maxlength="30" placeholder="备注，比如：PEN → 厦门 机票" style="margin-top:10px">` : ""}
     <div class="as-btns">${E ? `<button class="btn" data-act="delete" style="color:var(--seal);border-color:var(--seal)">删除这一笔</button>` : ""}<button class="btn" data-act="cancel">${E ? "不改了" : "先不记"}</button><button class="btn ink" data-act="save" style="flex:1.6">${E ? "保存" : "记下"}</button></div></div>`, { accent: "#3a2c1f" });
   if (E) { $("exAmt").value = E.amount; if ($("exNote2")) $("exNote2").value = E.note || ""; }

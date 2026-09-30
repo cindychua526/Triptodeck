@@ -25,9 +25,13 @@ export function openSettings() {
       ${api.mode === "local" ? `<div class="addrow"><input class="inp" id="stComp" maxlength="12" placeholder="加一个旅伴的名字（仅本机）"><button class="btn" data-act="addComp">添加</button></div>` : ""}</div>
     <div class="as-sec"><small>预演模式 · 出发前先试玩</small><p>把「今天」当作行程里的某一天，技能牌、打卡、账本都会按那天来算。</p>
       <select class="inp" id="stSim"><option value="">关闭（用真实日期 ${shortDate(new Date().toISOString().slice(0, 10))}）</option>${tripDays().map((d, i) => `<option value="${d}"${sim && today() === d ? " selected" : ""}>Day ${i + 1} · ${shortDate(d)}</option>`).join("")}</select></div>
-    <div class="as-sec"><label class="tog"><input type="checkbox" id="stSnd" ${soundOn() ? "checked" : ""}> 音效（iPhone 静音键打开时也会响）</label></div>
+    <div class="as-sec"><small>外观</small><div class="seg" id="stTheme"><button data-th="auto">跟随手机</button><button data-th="light">浅色</button><button data-th="dark">深色</button></div><p class="as-hint">深色适合晚上在车里、床上看。印章、票和护照会保持原来的纸色。</p></div>
+    <div class="as-sec"><label class="tog"><input type="checkbox" id="stSnd" ${soundOn() ? "checked" : ""}> 音效（iPhone 静音键打开时也会响）</label><label class="tog" style="margin-top:8px"><input type="checkbox" id="stAmb"> 天气氛围的背景声（雨、雪、黄昏、夜晚）</label></div>
     <div class="as-btns"><button class="btn ink full" data-act="close">完成</button><button class="linkbtn" data-act="out">${api.mode === "cloud" ? "退出登录" : "清空本机数据，重新开始"}</button></div></div>`, { accent: "#3a2c1f" });
   $("stSnd").onchange = e => setSound(e.target.checked);
+  import("../lib/sound.js").then(S => { const a = $("stAmb"); if (!a) return; a.checked = S.ambientOn(); a.onchange = () => S.setAmbientOn(a.checked); });
+  import("../lib/theme.js").then(TM => { const box = $("stTheme"); if (!box) return; const paint = () => box.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.th === TM.themePref())); paint();
+    box.querySelectorAll("button").forEach(b => b.onclick = () => { TM.setTheme(b.dataset.th); paint(); }); });
   const nb = sh.querySelector("[data-act=notif]"); if (nb) nb.onclick = async () => { const r = await askSystemPermission(); toast(r === "granted" ? "系统通知已打开" : r === "unsupported" ? "这个浏览器不支持系统通知" : "没有拿到通知权限，可以在手机设置里打开"); };
   $("stSim").onchange = e => { setSimDate(e.target.value || null); toast(e.target.value ? `预演：今天 = ${shortDate(e.target.value)}` : "已回到真实日期"); setTimeout(() => location.reload(), 700); };
   (() => { const sv = $("moonSvg"); if (!sv) return; const g = $("moonG"), sh = $("moonShade"), lines = [...$("moonLines").querySelectorAll("path")]; let ang = 0, last = null, phase = 0;

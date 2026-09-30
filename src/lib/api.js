@@ -10,7 +10,7 @@ const URL_ = import.meta.env.VITE_SUPABASE_URL, KEY_ = import.meta.env.VITE_SUPA
 const listeners = {};
 const emit = t => (listeners[t] || []).forEach(f => { try { f(); } catch (e) { console.error(e); } });
 export function on(table, f) { (listeners[table] = listeners[table] || []).push(f); return () => { listeners[table] = listeners[table].filter(x => x !== f); }; }
-const TRIP_EVENTS = ["trip", "checkins", "food_photos", "shared_photos", "wallet", "day_lines", "moments", "letters", "activities", "checklist_items", "decisions", "skill_log", "skill_effects", "trip_members", "custom_items", "expenses", "budget"];
+const TRIP_EVENTS = ["trip", "checkins", "food_photos", "shared_photos", "wallet", "day_lines", "moments", "letters", "activities", "checklist_items", "decisions", "skill_log", "skill_effects", "trip_members", "custom_items", "expenses", "budget", "photo_social"];
 const emitAll = () => TRIP_EVENTS.forEach(emit);
 
 const GENERIC_CHECKLIST = [
@@ -30,7 +30,7 @@ export const FUJIAN_TEMPLATE = { name: TRIP_SEED.name, start: TRIP_SEED.start, e
 /* ======================= cloud ======================= */
 function cloud() {
   const sb = createClient(URL_, KEY_, { auth: { persistSession: true, autoRefreshToken: true } });
-  let me = null, trip = null, membership = null, channel = null, members = [], trips = [];
+  let me = null, trip = null, membership = null, channel = null, socialCh = null, members = [], trips = [];
   const need = r => { if (r.error) { const e = new Error(r.error.message); e.code = r.error.code; throw e; } return r.data; };
   async function loadMembers() {
     try { await loadMembers0(); cacheSet("members:" + trip.id, { members, membership }); }
@@ -49,10 +49,19 @@ function cloud() {
     ["activities", "checklist_items", "decisions", "skill_log", "skill_effects", "skill_draws", "trip_members", "custom_items", "expenses", "departures", "checkins", "food_photos", "day_lines", "moments", "letters", "wallet_items", "shared_photos"].forEach(t =>
       channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: `trip_id=eq.${trip.id}` }, async () => { if (t === "trip_members") await loadMembers(); emit(t === "wallet_items" ? "wallet" : t); }));
     channel.subscribe();
+    /* likes & comments on their own channel, so a database without migration_5 can't break the main one */
+    try { if (socialCh) sb.removeChannel(socialCh); socialCh = sb.channel("social-" + trip.id).on("postgres_changes", { event: "*", schema: "public", table: "photo_social", filter: `trip_id=eq.${trip.id}` }, () => emit("photo_social")).subscribe(); } catch (e) {}
   }
+  const today_ = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  /* before migration_5: rebuild likes & comments from the log */
+  async function socialFromLog() { const L = need(await sb.from("skill_log").select("*").eq("trip_id", trip.id).in("action", ["LIKE", "UNLIKE", "COMMENT"]).order("created_at"));
+    const likes = new Map(), out = []; L.forEach(l => { const p = l.meta && l.meta.photo; if (!p) return; const k = p + "|" + l.user_id;
+      if (l.action === "LIKE") likes.set(k, { id: l.id, trip_id: l.trip_id, photo_id: p, owner_id: l.meta.owner, user_id: l.user_id, kind: "like", created_at: l.created_at }); else if (l.action === "UNLIKE") likes.delete(k);
+      else out.push({ id: l.id, trip_id: l.trip_id, photo_id: p, owner_id: l.meta.owner, user_id: l.user_id, kind: "comment", body: l.effect, created_at: l.created_at }); });
+    return [...likes.values(), ...out]; }
   async function refreshTrips() { try { await refreshTrips0(); cacheSet("trips:" + me.id, trips); } catch (e) { const c = isNetErr(e) && cacheGet("trips:" + me.id); if (!c) throw e; trips = c; } return trips; }
   async function refreshTrips0() { const rows = need(await sb.from("trip_members").select("trip_id, trips(*)").eq("user_id", me.id)); trips = rows.map(r => r.trips).filter(Boolean).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date))); return trips; }
-  async function useTrip(t) { trip = t; try { localStorage.setItem("td-trip", t.id); } catch (e) {} await loadMembers(); subscribe(); emitAll(); }
+  async function useTrip(t) { trip = t; try { localStorage.setItem("td-trip", t.id); } catch (e) {} await loadMembers(); subscribe(); emitAll(); setTimeout(() => api.flushQueue && api.flushQueue(), 1500); }
   const api = {
     mode: "cloud",
     get me() { return me; }, get trip() { return trip; }, get members() { return members; }, get trips() { return trips; },
@@ -105,18 +114,18 @@ function cloud() {
     async deleteActivity(id) { need(await sb.from("activities").delete().eq("id", id)); emit("activities"); },
     async checklist() { return need(await sb.from("checklist_items").select("*").eq("trip_id", trip.id).order("sort").order("created_at")); },
     async addCheck(category, label, sort, priv) { const row = { trip_id: trip.id, category, label, sort, created_by: me.id }; if (priv) row.private = true;
-      const r = await sb.from("checklist_items").insert(row); if (r.error && priv && /private|column|PGRST204|42703/i.test((r.error.code || "") + r.error.message)) { const e = new Error("NEED_MIGRATION_4"); e.code = "NEED_MIGRATION_4"; throw e; } need(r); emit("checklist_items"); },
+      const r = await sb.from("checklist_items").insert(row).select().single(); if (r.error && priv && /private|column|PGRST204|42703/i.test((r.error.code || "") + r.error.message)) { const e = new Error("NEED_MIGRATION_4"); e.code = "NEED_MIGRATION_4"; throw e; } need(r); emit("checklist_items"); return r.data; },
     async setCheckPrivate(id, priv) { const r = await sb.from("checklist_items").update({ private: !!priv }).eq("id", id); if (r.error && /private|column|PGRST204|42703/i.test((r.error.code || "") + r.error.message)) { const e = new Error("NEED_MIGRATION_4"); e.code = "NEED_MIGRATION_4"; throw e; } need(r); emit("checklist_items"); },
     async setCheck(id, done) { need(await sb.from("checklist_items").update({ done, done_by: done ? me.id : null, done_at: done ? new Date().toISOString() : null }).eq("id", id)); emit("checklist_items"); },
     async deleteCheck(id) { need(await sb.from("checklist_items").delete().eq("id", id)); emit("checklist_items"); },
     async renameCheck(id, label) { need(await sb.from("checklist_items").update({ label }).eq("id", id)); emit("checklist_items"); },
     async customItems() { return need(await sb.from("custom_items").select("*").eq("trip_id", trip.id).order("created_at")); },
-    async addCustom(it) { need(await sb.from("custom_items").insert({ ...it, trip_id: trip.id })); emit("custom_items"); },
+    async addCustom(it) { const r = need(await sb.from("custom_items").insert({ ...it, trip_id: trip.id }).select().single()); emit("custom_items"); return r; },
     async deleteCustom(id) { need(await sb.from("custom_items").delete().eq("id", id)); emit("custom_items"); },
     async updateCustom(id, patch) { need(await sb.from("custom_items").update(patch).eq("id", id)); emit("custom_items"); },
     async deleteDecision(id) { need(await sb.from("decisions").delete().eq("id", id).eq("user_id", me.id)); emit("decisions"); },
     async expenses() { return need(await sb.from("expenses").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false })); },
-    async addExpense(e) { need(await sb.from("expenses").insert({ ...e, trip_id: trip.id })); emit("expenses"); },
+    async addExpense(e) { const r = need(await sb.from("expenses").insert({ ...e, trip_id: trip.id }).select().single()); emit("expenses"); return r; },
     async deleteExpense(id) { need(await sb.from("expenses").delete().eq("id", id)); emit("expenses"); },
     async updateExpense(id, patch) { need(await sb.from("expenses").update(patch).eq("id", id)); emit("expenses"); },
     async updateBudget(patch) { const { currency, ...rest } = patch;
@@ -153,13 +162,21 @@ function cloud() {
     async buddyWallet() { return trip ? need(await sb.from("wallet_items").select("*").eq("trip_id", trip.id).neq("user_id", me.id)) : []; },
     async sharedPhotos() { return trip ? need(await sb.from("shared_photos").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false })) : []; },
     async addSharedPhoto(photo_path, caption, date) { need(await sb.from("shared_photos").insert({ trip_id: trip.id, photo_path, caption: caption || null, date: date || undefined })); emit("shared_photos"); },
+    /* 点赞 · 评论 (migration_5: own table; before that, kept in the skill log) */
+    async photoSocial() { if (!trip) return []; const r = await sb.from("photo_social").select("*").eq("trip_id", trip.id).order("created_at");
+      if (r.error && /photo_social|42P01|PGRST205|schema cache/i.test((r.error.code || "") + r.error.message)) return socialFromLog(); return need(r); },
+    async setLike(photo, owner, onOff) { const r = onOff ? await sb.from("photo_social").insert({ trip_id: trip.id, photo_id: photo, owner_id: owner || null, kind: "like" }) : await sb.from("photo_social").delete().eq("photo_id", photo).eq("user_id", me.id).eq("kind", "like");
+      if (r.error && /photo_social|42P01|PGRST205|schema cache/i.test((r.error.code || "") + r.error.message)) return api.addLog(today_(), null, onOff ? "LIKE" : "UNLIKE", "", { photo, owner });
+      if (r.error && /23505|duplicate/i.test((r.error.code || "") + r.error.message)) return; need(r); emit("photo_social"); },
+    async addComment(photo, owner, body) { const r = await sb.from("photo_social").insert({ trip_id: trip.id, photo_id: photo, owner_id: owner || null, kind: "comment", body });
+      if (r.error && /photo_social|42P01|PGRST205|schema cache/i.test((r.error.code || "") + r.error.message)) return api.addLog(today_(), null, "COMMENT", body, { photo, owner }); need(r); emit("photo_social"); },
     async removeSharedPhoto(id) { need(await sb.from("shared_photos").delete().eq("id", id)); emit("shared_photos"); },
     async savePushSub(sub) { need(await sb.from("push_subs").upsert({ ...sub, user_id: me.id, trip_id: trip ? trip.id : null }, { onConflict: "endpoint" })); },
     async reclaim(code) { const n = need(await sb.rpc("reclaim_identity", { p_code: code })); await refreshTrips(); return n; },
     async removeMember(uid) { need(await sb.rpc("remove_member", { t: trip.id, u: uid })); await loadMembers(); emit("trip_members"); },
     async dayLines(date) { return need(await sb.from("day_lines").select("*").eq("trip_id", trip.id).eq("date", date)); },
     async saveDayLine(date, text, mood) { need(await sb.from("day_lines").upsert({ trip_id: trip.id, user_id: me.id, date, text, mood }, { onConflict: "trip_id,user_id,date" })); emit("day_lines"); },
-    async moments(date) { return need(await sb.from("day_lines").select("*").eq("trip_id", trip.id).eq("date", date)); },
+    async moments(date) { return need(await sb.from("moments").select("*").eq("trip_id", trip.id).eq("date", date)); },
     async addMoment(date, note, lat, lng) { need(await sb.from("moments").insert({ trip_id: trip.id, date, note, lat, lng })); emit("moments"); },
     async momentsOn(date) { return need(await sb.from("moments").select("*").eq("trip_id", trip.id).eq("date", date).order("created_at")); },
     async letters() { return need(await sb.from("letters").select("*").eq("trip_id", trip.id)); },
@@ -187,7 +204,7 @@ function cloud() {
     async addLog(date, card, action, effect, meta) { need(await sb.from("skill_log").insert({ trip_id: trip.id, date, card, action, effect, meta: meta || {} })); emit("skill_log"); },
     accessToken: async () => (await sb.auth.getSession()).data.session?.access_token
   };
-  return offlineWrap(api, { trip: () => trip, me: () => me, emit });
+  return offlineWrap(api, { trip: () => trip, me: () => me, members: () => members, emit });
 }
 
 /* ======================= local (demo) ======================= */
@@ -273,6 +290,9 @@ function local() {
     async refresh() { TRIP_EVENTS.filter(x => x !== "trip").forEach(emit); },
     async setCaption(kind, id, caption) { const n = { stamp: "stamps", food: "food_photos", shared: "shared_photos" }[kind], r = A(n).find(x => x.id === id); if (r) r.caption = caption || null; save(); emit(n === "stamps" ? "stamps" : n); }, async buddyWallet() { return []; },
     async sharedPhotos() { return T("shared_photos").sort((a, b) => b.created_at.localeCompare(a.created_at)); },
+    async photoSocial() { return T("photo_social"); },
+    async setLike(photo, owner, onOff) { db.photo_social = A("photo_social").filter(x => !(x.trip_id === db.cur && x.photo_id === photo && x.user_id === db.me.id && x.kind === "like")); if (onOff) A("photo_social").push({ id: uid("ps"), trip_id: db.cur, photo_id: photo, owner_id: owner, user_id: db.me.id, kind: "like", created_at: now() }); save(); emit("photo_social"); },
+    async addComment(photo, owner, body) { A("photo_social").push({ id: uid("ps"), trip_id: db.cur, photo_id: photo, owner_id: owner, user_id: db.me.id, kind: "comment", body, created_at: now() }); save(); emit("photo_social"); },
     async addSharedPhoto(photo_path, caption, date) { A("shared_photos").push({ id: uid("sp"), trip_id: db.cur, user_id: db.me.id, photo_path, caption, date: date || new Date().toISOString().slice(0, 10), created_at: now() }); save(); emit("shared_photos"); },
     async removeSharedPhoto(id) { db.shared_photos = A("shared_photos").filter(x => x.id !== id); save(); emit("shared_photos"); }, async myEmail() { return null; }, async emailStart() { throw new Error("单机模式没有邮箱登录"); }, async emailVerify() { throw new Error("单机模式没有邮箱登录"); }, async reclaim() { throw new Error("单机模式没有房间"); }, async removeMember() {},
     async dayLines(date) { return T("day_lines").filter(x => x.date === date); },

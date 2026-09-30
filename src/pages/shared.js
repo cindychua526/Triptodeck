@@ -6,12 +6,11 @@ import { mus, sfx } from "../lib/sound.js";
 import { lookChips, bindLookChips } from "../lib/look.js";
 /* 点赞 · 评论: kept in the trip log (LIKE / UNLIKE / COMMENT with the photo id), so everyone in the room sees them */
 let social = { like: {}, cmts: {} };
-function buildSocial(logs) {
+function buildSocial(rows) {
   const out = { like: {}, cmts: {} };
-  logs.slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).forEach(l => { const id = l.meta && l.meta.photo; if (!id) return;
-    if (l.action === "LIKE") (out.like[id] = out.like[id] || new Set()).add(l.user_id);
-    if (l.action === "UNLIKE") out.like[id] && out.like[id].delete(l.user_id);
-    if (l.action === "COMMENT") (out.cmts[id] = out.cmts[id] || []).push(l); });
+  rows.slice().sort((a, b) => String(a.created_at).localeCompare(String(b.created_at))).forEach(r => { const id = r.photo_id; if (!id) return;
+    if (r.kind === "like") (out.like[id] = out.like[id] || new Set()).add(r.user_id);
+    if (r.kind === "comment") (out.cmts[id] = out.cmts[id] || []).push({ user_id: r.user_id, effect: r.body || "" }); });
   return out;
 }
 const likesOf = id => social.like[id] || new Set();
@@ -20,8 +19,8 @@ export async function openShared() {
   document.querySelector(".shp")?.remove();
   const ov = document.createElement("div"); ov.className = "shp"; ov.setAttribute("role", "dialog");
   const draw = async () => {
-    let S = [], F = [], LG = []; try { [S, F, LG] = await Promise.all([api.sharedPhotos(), api.foodPhotos(), api.log().catch(() => [])]); } catch (e) {}
-    social = buildSocial(LG);
+    let S = [], F = [], SO = []; try { [S, F, SO] = await Promise.all([api.sharedPhotos(), api.foodPhotos(), api.photoSocial ? api.photoSocial().catch(() => []) : []]); } catch (e) {}
+    social = buildSocial(SO);
     const all = [...S.map(p => ({ ...p, k: "s" })), ...F.map(p => ({ ...p, k: "f", label: p.food }))].sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.created_at).localeCompare(String(a.created_at)));
     const byDay = {}; all.forEach(p => (byDay[p.date] = byDay[p.date] || []).push(p));
     ov.innerHTML = `<button class="sc-x" aria-label="关闭">×</button><div class="shp-in"><small class="as-k">SHARED ALBUM</small><h2>大家的相册</h2><p class="as-hint">房间里每个人上传的照片都在这里，美食票里拍的也会自动进来。</p>
@@ -42,12 +41,12 @@ export async function openShared() {
     const paintSoc = () => { const L = likesOf(p.id), me = L.has(api.me.id), lb = v.querySelector("[data-a=like]"); lb.setAttribute("aria-pressed", me); lb.firstChild.textContent = me ? "♥ " : "♡ ";
       lb.querySelector("span").textContent = L.size ? `${L.size} · ${[...L].map(nameOf).join("、")}` : "赞一下";
       v.querySelector(".shp-cmts").innerHTML = (social.cmts[p.id] || []).map(c => `<p><b>${esc(nameOf(c.user_id))}</b>${esc(c.effect)}</p>`).join(""); };
-    const like = async (force) => { const on = likesOf(p.id).has(api.me.id); if (force && on) return; const next = !on; try { await api.addLog(p.date || today(), null, next ? "LIKE" : "UNLIKE", "", { photo: p.id, owner: p.user_id }); } catch (e) { return toast("没能点赞"); }
+    const like = async (force) => { const on = likesOf(p.id).has(api.me.id); if (force && on) return; const next = !on; try { await api.setLike(p.id, p.user_id, next); } catch (e) { return toast("没能点赞"); }
       (social.like[p.id] = social.like[p.id] || new Set())[next ? "add" : "delete"](api.me.id); paintSoc(); if (next) { mus.chime(6, .03); heart(); } };
     const heart = () => { const h = document.createElement("i"); h.className = "shp-heart"; h.textContent = "♥"; v.appendChild(h); setTimeout(() => h.remove(), 900); };
     v.querySelector("[data-a=like]").onclick = () => like();
     v.querySelector("[data-a=cmt]").onclick = async () => { const t = await askText("写一句评论", ""); if (!t || !t.trim()) return; const row = { user_id: api.me.id, effect: t.trim().slice(0, 140) };
-      try { await api.addLog(p.date || today(), null, "COMMENT", row.effect, { photo: p.id, owner: p.user_id }); (social.cmts[p.id] = social.cmts[p.id] || []).push(row); paintSoc(); mus.pluck(4, .03); } catch (e) { toast("没能发出去"); } };
+      try { await api.addComment(p.id, p.user_id, row.effect); (social.cmts[p.id] = social.cmts[p.id] || []).push(row); paintSoc(); mus.pluck(4, .03); } catch (e) { toast("没能发出去"); } };
     /* tap closes, double-tap likes */
     let tapT = 0; v.querySelector("img").onclick = () => { if (tapT) { clearTimeout(tapT); tapT = 0; like(true); return; } tapT = setTimeout(() => { tapT = 0; v.remove(); }, 280); };
     paintSoc();

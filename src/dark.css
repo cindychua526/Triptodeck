@@ -1,0 +1,112 @@
+/* =================================================================
+   深色 · night paper. Loaded last; everything is scoped to :root[data-dark].
+   The idea: the table goes dark, the ink turns light, printed objects (stamps, tickets,
+   passport pages, newspaper, receipt, wallet) keep their own paper colour.
+   ================================================================= */
+:root[data-dark]{
+  --paper:#1b1f1a !important; --card:#242923 !important; --linen:#222720 !important; --ink:#e9e4d6 !important; --ink2:#bdc3b1 !important;
+  --mute:#9ea591 !important; --muted:#9ea591 !important; --line:rgba(233,228,214,.14) !important; --seal:#e36a50 !important; --moss:#7f9a78 !important; --tea:#c8a27a !important;
+  --bg:#1b1f1a !important; --fg:#e9e4d6 !important; --panel:#242923 !important; --chip:rgba(36,41,35,.92) !important; --cream:#242923 !important;
+  color-scheme:dark;
+}
+:root[data-dark] body{ background:#1b1f1a !important; color:var(--ink); }
+:root[data-dark] body::after{ opacity:.07 !important; }
+
+/* cards, sheets, nav, controls */
+:root[data-dark] :is(.gd-item, .lore-c, .settle, .bg-row, .bg-pre, .inbox, .gd-card, .chk-item, .act, .day-card, .log-row, .dp-card, .bg-cat, .bg-total, .dk-note, .sheet-card, .tl-item, .kraft-soft, .bg-import, .ck-cat, .task, .kraft, .day-head.kraft, .pool, .bill, .fd-card, .bk2-t, .rit, .rcp, .hb, .hub-t, .hb-row, .g2-t, .sp-t, .dw-card, .gs-r, .atm-card, .tt-i){
+  background-color:#232822 !important; background-image:repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px) !important; color:var(--ink) !important;
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 10px 24px rgba(0,0,0,.35) !important; }
+:root[data-dark] :is(.hub-t, .g2-t, .sp-t, .dw-card, .atm-card){ border-color:rgba(233,228,214,.22) !important; box-shadow:3px 3px 0 rgba(0,0,0,.35) !important; }
+:root[data-dark] .hub-t .ht-frame{ border-left-color:rgba(233,228,214,.14) !important; }
+:root[data-dark] .hub-t .ht-txt b, :root[data-dark] .hub-t .ht-txt span{ color:var(--ink) !important; -webkit-text-fill-color:var(--ink) !important; }
+:root[data-dark] .hub-t .ht-txt span{ color:var(--ink2) !important; -webkit-text-fill-color:var(--ink2) !important; }
+:root[data-dark] nav.tabs{ background:#20251f !important; border-color:rgba(233,228,214,.12) !important; box-shadow:0 8px 24px rgba(0,0,0,.45) !important; }
+:root[data-dark] nav.tabs .tab{ color:#9ea591 !important; } :root[data-dark] nav.tabs .tab.on{ color:#f1ecde !important; background:rgba(255,255,255,.06) !important; }
+:root[data-dark] nav.tabs svg{ color:inherit; }
+:root[data-dark] .usheet{ background:#242923 !important; color:var(--ink) !important; box-shadow:0 -20px 60px rgba(0,0,0,.6) !important; }
+:root[data-dark] .uov{ background:rgba(0,0,0,.55) !important; }
+:root[data-dark] .btn{ border-color:rgba(233,228,214,.55) !important; color:var(--ink) !important; background:transparent !important; }
+:root[data-dark] .btn.ink, :root[data-dark] .btn.solid, :root[data-dark] .btn.primary, :root[data-dark] .fab{ background:#e9e4d6 !important; color:#1b1f1a !important; border-color:#e9e4d6 !important; }
+:root[data-dark] .btn.warn.solid{ background:#c8321f !important; border-color:#c8321f !important; color:#fff !important; }
+:root[data-dark] :is(.inp, input.inp, textarea.inp, select.inp){ background:#1d211c !important; color:var(--ink) !important; border-color:rgba(233,228,214,.18) !important; }
+:root[data-dark] ::placeholder{ color:#7f8676 !important; }
+:root[data-dark] :is(.chip, .chip.sm, .day-chip, .seg, .sp-chip){ background:#232822 !important; color:var(--ink) !important; border-color:rgba(233,228,214,.18) !important; }
+:root[data-dark] :is(.chip.on, .day-chip.on, .seg button.on){ background:#e9e4d6 !important; color:#1b1f1a !important; }
+:root[data-dark] .seg button{ color:var(--ink2) !important; background:transparent !important; }
+:root[data-dark] .icon-btn{ background:#232822 !important; color:var(--ink) !important; border-color:rgba(233,228,214,.18) !important; }
+:root[data-dark] .toast{ background:#e9e4d6 !important; color:#1b1f1a !important; }
+:root[data-dark] .linkbtn{ color:var(--ink2) !important; }
+:root[data-dark] :is(h1,h2,h3,h4,b,strong){ color:inherit; }
+:root[data-dark] :is(.ph h2, .tp-top h2, .bk2-top h2, .usheet h3, .as h3, .sk-sec-h b, .day-head b, .hb-row b, .gd-hero b){ color:var(--ink) !important; }
+:root[data-dark] :is(.ph p, .tp-top small, .bk2-top small, .bk2-top span, .sk-sec-h, .col-note, .as-hint, .bk2-l small, .tl-meta, .hb-row small){ color:var(--ink2) !important; }
+
+/* the Today page */
+:root[data-dark] .hb{ background:#232822 !important; }
+:root[data-dark] .hb *{ border-color:rgba(233,228,214,.14); }
+:root[data-dark] .hb-row time{ color:var(--ink2) !important; border-right-color:rgba(233,228,214,.12) !important; }
+
+/* trip timeline */
+:root[data-dark] .tl-it time, :root[data-dark] .tl-body b{ color:var(--ink) !important; }
+:root[data-dark] .tl::before, :root[data-dark] .tl-it::before{ border-color:rgba(233,228,214,.2) !important; }
+:root[data-dark] .tl-stamp.got svg, :root[data-dark] .dw-ring{ mix-blend-mode:normal; }
+:root[data-dark] .dw-ring{ background:radial-gradient(circle, #232822 58%, transparent 59%), conic-gradient(var(--seal) calc(var(--p) * 1%), rgba(233,228,214,.14) 0) !important; }
+
+/* 手账 tiles: keep the little previews on paper so stamps read correctly */
+:root[data-dark] .bk2-pv{ background-color:#e9e2d0 !important; border-radius:2px; }
+:root[data-dark] .bk2-pv svg{ mix-blend-mode:multiply; }
+:root[data-dark] .bk2-pv.dy{ background:#ece6d6 !important; } :root[data-dark] .bk2-pv.dy em{ color:#6a6152 !important; }
+
+/* 账本 */
+:root[data-dark] .bg-hero.kraft{ background:#2e3a2c !important; }
+:root[data-dark] .bg-tabs{ background:rgba(36,41,35,.92) !important; border-color:rgba(233,228,214,.14) !important; }
+:root[data-dark] .bg-tabs button{ color:var(--ink2) !important; } :root[data-dark] .bg-tabs button[aria-selected=true]{ background:#e9e4d6 !important; color:#1b1f1a !important; }
+:root[data-dark] .bg-day{ background:#232822 !important; color:var(--ink) !important; border-color:rgba(233,228,214,.16) !important; }
+:root[data-dark] .bg-day.on{ border-color:#e9e4d6 !important; }
+
+/* 撕票 */
+:root[data-dark] #pg-tear .spot{ background:#e9e2d0 !important; }
+:root[data-dark] .food-info{ background:#232822 !important; color:var(--ink) !important; }
+:root[data-dark] .tt-i{ border-color:rgba(233,228,214,.25) !important; }
+:root[data-dark] .tt-i span{ background:#e9e2d0; border-radius:50%; padding:4px; box-sizing:border-box; }
+
+/* dialogs & overlays built on paper keep a light card (they're notes), but the room behind goes dark */
+:root[data-dark] .dlg{ background:rgba(0,0,0,.6) !important; }
+:root[data-dark] .shp{ background:#1b1f1a !important; color:var(--ink) !important; }
+:root[data-dark] .netpill{ background:#e9e4d6; color:#1b1f1a; }
+
+/* the collect-page reader backgrounds that were cream */
+:root[data-dark] .fw-reader, :root[data-dark] .fw-reader .rd-body{ background:#1b1f1a !important; }
+:root[data-dark] .fw-cover{ background:radial-gradient(85% 65% at 50% 42%, #2c2a24, #1b1f1a 75%) !important; }
+:root[data-dark] .fw-open{ color:#c8b48e !important; }
+:root[data-dark] .wm-city b{ color:var(--ink) !important; }
+:root[data-dark] .tkm-perf::before, :root[data-dark] .tkm-perf::after{ background:#1b1f1a !important; }
+
+/* ---- second pass ---- */
+:root[data-dark] .day-chip.on, :root[data-dark] .day-chip.on *{ color:#1b1f1a !important; }
+:root[data-dark] .ck-priv{ background:#232822 !important; background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0 6px, transparent 6px 12px) !important; border-color:rgba(233,228,214,.2) !important; color:var(--ink) !important; }
+:root[data-dark] .ck-priv *{ color:inherit; } :root[data-dark] .ck-priv small, :root[data-dark] .ck-priv p{ color:var(--ink2) !important; }
+:root[data-dark] .rit-row{ color:var(--ink) !important; background:transparent !important; } :root[data-dark] .rit-row span{ color:var(--ink) !important; } :root[data-dark] .rit-row.done span{ color:var(--ink2) !important; }
+:root[data-dark] .rit-row i{ border-color:rgba(233,228,214,.45) !important; }
+:root[data-dark] .rcp, :root[data-dark] .rcp *{ color:var(--ink); }
+:root[data-dark] .bg-num b, :root[data-dark] .bg-num small, :root[data-dark] .bg-num span{ color:#f1ecde !important; -webkit-text-fill-color:#f1ecde !important; }
+:root[data-dark] .gd-hero{ background:#2e3a2c !important; color:#f1ecde !important; } :root[data-dark] .gd-hero *{ color:#f1ecde !important; }
+:root[data-dark] #pg-tear .spot b{ background:#fffdf6 !important; color:#2a2420 !important; }
+:root[data-dark] .food-info, :root[data-dark] .food-info b, :root[data-dark] .food-info p{ color:var(--ink) !important; }
+:root[data-dark] .food-info em{ color:var(--ink2) !important; }
+:root[data-dark] .g2-art.news{ background:#efe8d6 !important; } :root[data-dark] .g2-art.news i{ color:#2a2420 !important; border-color:#2a2420 !important; }
+:root[data-dark] .bk2-pv.wl i.bk2-stub:nth-child(n), :root[data-dark] .bk2-stub{ background:#fbf8f1 !important; border-color:#2f3a2e !important; } :root[data-dark] .bk2-stub b{ color:#2f3a2e !important; }
+:root[data-dark] .bk2-pv.dy{ color:#2f3a2e !important; }
+/* the fortune envelope and other paper props on the Today page keep dark ink */
+:root[data-dark] #pg-fortune .stage, :root[data-dark] #stage{ --ink:#2f3a2e; --ink2:#5c6a58; --fg:#2f3a2e; }
+:root[data-dark] .tkm, :root[data-dark] .fw2-tag, :root[data-dark] .np, :root[data-dark] .sb-page, :root[data-dark] .pp-page, :root[data-dark] .rl-in, :root[data-dark] .dlg-card, :root[data-dark] .paper{ --ink:#2f3a2e; --ink2:#5c6a58; --mute:#8a917f; --fg:#2f3a2e; --line:rgba(47,58,46,.14); color:#2f3a2e; }
+
+:root[data-dark] .tl-stamp.got{ background:#e9e2d0; border-radius:3px !important; padding:3px; box-sizing:border-box; transform:rotate(-6deg); }
+:root[data-dark] .tl-stamp.got svg{ mix-blend-mode:multiply; }
+:root[data-dark] .tl-stamp.todo{ border-color:rgba(227,106,80,.45) !important; }
+
+/* 档案架 */
+:root[data-dark] .shelf-h p, :root[data-dark] .fd-now, :root[data-dark] .shelf-foot .linkbtn{ color:#bdc3b1 !important; }
+:root[data-dark] .shelf-h h2{ color:#f1ecde !important; }
+/* the dusk tint repaints the whole body in warm paper; in dark mode keep it dark, just a touch warmer */
+:root[data-dark] body.atm-dusk{ --paper:#211f1b; --card:#2a2722; --linen:#26231e; --ink:#e9e4d6; --ink2:#bdc3b1; --mute:#9ea591; --line:rgba(233,228,214,.14); background:#211f1b !important; }
+:root[data-dark] .rl-in .sc-x, :root[data-dark] .dlg-card .sc-x{ background:#2f3a2e !important; color:#f4efe2 !important; border-color:#2f3a2e !important; }

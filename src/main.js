@@ -3,6 +3,8 @@ import "./skin.css";
 import "./stage.css";
 import "./washi.css";
 import "./extra.css";
+import "./dark.css";
+import "./lib/theme.js";
 import { startI18n } from "./lib/i18n.js";
 import { renderToday } from "./pages/today.js";
 import "./lib/atmos.js";
@@ -55,7 +57,7 @@ export function go(p, push = true) {
   if (p === "fortune" && !document.querySelector("#stage .card.revealed, #stage.front")) setTimeout(() => renderToday(), 80);
   if (!document.getElementById("pg-" + p)) p = "fortune";
   document.querySelectorAll(".page").forEach(s => s.classList.toggle("on", s.id === "pg-" + p));
-document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.p === TAB_OF[p]));
+document.querySelectorAll(".tab").forEach(t => { const on = t.dataset.p === TAB_OF[p]; t.classList.toggle("on", on); on ? t.setAttribute("aria-current", "page") : t.removeAttribute("aria-current"); });
   if (push && location.hash !== "#/" + p) history.pushState({ p }, "", "#/" + p);
   if (p === "trip") renderTrip();
   if (p === "deck") onShowDeck();
@@ -73,7 +75,8 @@ addEventListener("td-go", e => go(e.detail));
 
 async function start() {
   let s = null; try { s = await api.init(); } catch (e) { console.warn(e); }
-  if (!s || !api.trip) await onboard();
+  const firstRun = !s || !api.trip;
+  if (firstRun) await onboard();
   fortuneMod = await import("./pages/fortune.js");
   fortuneMod.hydrateFortune();
   initTickets(); initCollection();
@@ -83,8 +86,11 @@ async function start() {
   on("trip", async () => { await loadBudget(); fortuneMod.refreshWeather(); refreshArrive(); if (!api.trip) go("trip"); });
   const m = location.hash.match(/^#\/(\w+)/);
   go(m ? m[1] : "fortune", false);
-  if (s && api.trips.length) openShelf();
+  /* the shelf of books greets you on launch only when there's a choice to make (2+ trips), and at most every 6 hours */
+  try { const last = +localStorage.getItem("td-shelf-at") || 0; if (s && api.trips.length > 1 && Date.now() - last > 6 * 3600e3) { localStorage.setItem("td-shelf-at", String(Date.now())); openShelf(); } } catch (e) {}
   startI18n(); renderToday();
+  import("./lib/whatsnew.js").then(m => m.maybeShowNew(go, firstRun));
+  setTimeout(() => import("./lib/memory.js").then(m => m.checkMemory(go)), 12000);
   setCardArt(k => { try { return cardHTML(k, { cls: "mini" }); } catch (e) { return ""; } }); startNotify(); setTimeout(() => import("./lib/ooc.js").then(m => m.checkOOC()), 2200);
   onNotifyAction("skill", () => go("deck")); onNotifyAction("reviewed", () => { go("collect"); setTimeout(() => openBookPart("passport"), 300); }); onNotifyAction("receipt", () => openReceipt()); onNotifyAction("remind", () => { go("trip"); setTimeout(() => document.querySelector("#pg-trip [data-seg=check]")?.click(), 300); });
   onNotifyAction("photo", () => import("./pages/shared.js").then(m => m.openShared()));
@@ -98,3 +104,6 @@ async function eveningPaper() {
   const { banner } = await import("./lib/notify.js"); banner({ kind: "paper", d, icon: "报", kicker: "晚报出版", title: "今天的《旅途小报》印好了", body: "把今天的打卡、美食和骰子排成了一张报纸", action: "看看" });
 }
 start();
+
+/* after a new deploy, a phone still running the old page asks for code files that no longer exist: reload once to pick up the new version */
+addEventListener("vite:preloadError", e => { try { if (sessionStorage.getItem("td-reload-once")) return; sessionStorage.setItem("td-reload-once", "1"); } catch (x) { return; } e.preventDefault(); location.reload(); });

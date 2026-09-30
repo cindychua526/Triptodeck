@@ -1,4 +1,5 @@
 import { api, on, nameOf } from "../lib/api.js";
+import { t as T } from "../lib/i18n.js";
 import { ic } from "../lib/icons.js";
 import { $, esc, today, addDays, shortDate, weekday, toMin, fmtMin, whenTxt, uid } from "../lib/util.js";
 import { openSheet, closeSheet, toast, bind, askConfirm, askText } from "../lib/ui.js";
@@ -6,9 +7,9 @@ import { sfx } from "../lib/sound.js";
 import { GUIDE, STAYS, EXTRA_PLACES, kindIcon } from "../data/fujian.js";
 import { ICON } from "../data/world.js";
 import { openCheckin, openSpecial, reviewInboxHTML, wireInbox, loadCheckins } from "./checkin.js";
-import { myStamps } from "./collection.js";
+import { myStamps, stampFor } from "./collection.js";
 import { openSettings } from "./settings.js";
-import { mountMap, mapTools, missingCoords } from "./map.js";
+import { mountMap, mapTools, missingCoords, coordOf } from "./map.js";
 import { GUIDES, guideFor } from "../data/guides.js";
 import { expsFor } from "../data/experiences.js";
 import { loreFor } from "../data/lore.js";
@@ -57,6 +58,30 @@ function dayIndex(d) { return tripDays().indexOf(d) + 1; }
 function stayFor(d) { return api.trip && api.trip.template === "fujian" ? STAYS.find(s => d >= s.in && d < s.out) : null; }
 const KIND_LABEL = { sight: "景点", food: "美食", transit: "交通", lodging: "住宿", flight: "航班" };
 
+function tightWarn(a0, a1) {
+  const gap = toMin(a1.time) - (toMin(a0.time) + (a0.dur || 60) + (a0.extra_min || 0));
+  if (gap < 0) return `<li class="tl-warn over">⚠ ${T(`和「${esc(a0.title)}」时间重叠了 ${-gap} 分钟 · 点上面的地点可以改时间`, `Overlaps "${esc(a0.title)}" by ${-gap} min · tap a place above to change its time`)}</li>`;
+  const p = coordOf(a0), q = coordOf(a1); if (!p || !q) return "";
+  const R = 6371, r = Math.PI / 180, x = Math.sin((q[0] - p[0]) * r / 2) ** 2 + Math.cos(p[0] * r) * Math.cos(q[0] * r) * Math.sin((q[1] - p[1]) * r / 2) ** 2, km = 2 * R * Math.asin(Math.sqrt(x)) * 1.3;
+  const need = Math.round(km < 1.2 ? km * 14 : km / 22 * 60 + 10);
+  if (need <= gap + 5 || need < 10) return "";
+  return `<li class="tl-warn">⚠ ${T(`可能来不及：从「${esc(a0.title)}」过去约 ${need} 分钟（${km < 1.2 ? "走路" : "打车"}），中间只留了 ${Math.max(0, gap)} 分钟`, `Tight: about ${need} min from "${esc(a0.title)}" (${km < 1.2 ? "on foot" : "by taxi"}), only ${Math.max(0, gap)} min left`)}</li>`;
+}
+/* under the day's plan: how the day is going, and a peek at tomorrow (fills the empty half of the page) */
+function dayWrapHTML(d, list, stamps, days) {
+  const places = list.filter(a => (a.kind === "sight" || a.kind === "food") && a.status !== "removed" && a.status !== "skipped");
+  const got = places.filter(a => stamps.some(s => s.date === d && (s.name === a.title || (a.spots || []).includes(s.name)))).length;
+  const extra = stamps.filter(s => s.date === d && s.kind === "special").length, i = days.indexOf(d), next = days[i + 1];
+  const nextActs = next ? dayActs(next).filter(a => a.status !== "removed" && a.kind !== "transit").slice(0, 4) : [];
+  const pct = places.length ? Math.round(got / places.length * 100) : 0;
+  return `<div class="dw">
+    <div class="dw-card"><small>${d === today() ? "今天" : shortDate(d)} · 小结</small>
+      <div class="dw-row"><div class="dw-ring" style="--p:${pct}"><b>${got}</b><i>/${places.length}</i></div><p>${places.length ? (got === places.length ? "今天的地方都盖到章了 ✦" : got ? `还差 ${places.length - got} 个地方就集齐今天的章` : "今天还没盖章，出发吧") : "今天没有安排景点，随便走走也很好"}${extra ? `<br><span>另外还有 ${extra} 枚计划外的奇遇章</span>` : ""}</p></div></div>
+    ${next ? `<button class="dw-card dw-next" data-day="${next}"><small>明天 · ${shortDate(next)} ${weekday(next)} · ${esc(cityOf(next))}</small>
+      ${nextActs.length ? `<ol>${nextActs.map(a => `<li><time>${a.time || ""}</time><span>${esc(a.title)}</span></li>`).join("")}</ol>` : `<p>明天还没有安排，留给惊喜。</p>`}<em>看明天 ›</em></button>`
+      : `<div class="dw-card dw-next"><small>最后一天</small><p>旅行的最后一天。晚上记得打开「每日小报」，看看这一趟的旅伴奖项。</p></div>`}
+  </div>`;
+}
 export function render() {
   const root = $("tripRoot"); if (!root) return;
   if (!api.trip) { root.innerHTML = `<div class="ph"><h2>还没有旅行</h2><p>开一本新的旅行手账，或者用邀请码加入朋友的。</p></div><div class="tp-actions"><button class="btn ink" data-act="trips">打开我的旅行</button></div>`; bind(root, { trips: () => openTrips() }); return; }
@@ -85,7 +110,13 @@ export function render() {
     if (!list.length) h += `<p class="empty">这一天还没有安排</p>`;
     h += `<ol class="tl">`;
     const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+    let prevA = null, hadMove = false;
     list.forEach(a => {
+      /* 行程太赶: not enough time to get from the last place to this one */
+      if (a.kind === "transit") hadMove = true;
+      else if (a.status !== "removed" && a.status !== "skipped") {
+        if (prevA && !hadMove) { const w = tightWarn(prevA, a); if (w) h += w; }
+        prevA = a; hadMove = false; }
       const st = a.status, dead = st === "removed" || st === "skipped", mine = stamps.filter(s => s.date === d && (s.name === a.title || (a.spots || []).includes(s.name)));
       if (a.kind === "transit") { h += `<li class="tl-move${dead ? " dead" : ""}"><time>${a.time}</time><span>${esc(a.title)}${a.note ? " · " + esc(a.note) : ""}</span></li>`; return; }
       const cur = isToday && toMin(a.time) <= nowMin && nowMin < toMin(a.time) + a.dur + (a.extra_min || 0);
@@ -96,12 +127,13 @@ export function render() {
             <span class="tl-meta">${KIND_LABEL[a.kind] || ""}${a.dur ? " · " + durLabel(a.dur) : ""}${a.extra_min ? ` · <em>+${a.extra_min / 60}h 时间暂停</em>` : ""}${a.is_main ? " · 🔒主要行程" : ""}${a.source === "special" ? " · ✦计划外" : ""}${st === "skipped" ? " · 已传送跳过" : ""}${st === "removed" ? " · 已删除" : ""}</span>
             ${a.note ? `<span class="tl-note">${esc(a.note)}</span>` : ""}
             ${st === "done" ? `<span class="tl-done">✓ ${esc(nameOf(a.done_by))} 标记完成</span>` : ""}</span>
-          ${mine.length ? `<span class="tl-stamp" title="已打卡">印</span>` : ""}
+          ${mine.length ? `<span class="tl-stamp got" title="已打卡">${stampFor(mine[0])}</span>` : (a.kind === "sight" || a.kind === "food") && !dead ? `<span class="tl-stamp todo" aria-hidden="true"></span>` : ""}
         </button>
         ${(a.spots || []).length ? `<div class="spot-chips">${a.spots.map(s => `<button class="sp-chip${stamps.some(x => x.date === d && x.name === s) ? " got" : ""}" data-spot="${esc(s)}" data-aid="${a.id}">${stamps.some(x => x.date === d && x.name === s) ? "✓ " : ""}${esc(s)}</button>`).join("")}</div>` : ""}
       </li>`;
     });
     h += `</ol><div class="tp-actions"><button class="btn" data-act="add">＋ 加一个地点</button><button class="btn ink" data-act="special">✦ 临时打卡（计划外）</button></div>`;
+    h += dayWrapHTML(d, list, stamps, days);
   } else if (seg === "guide") {
     h += guideHTML();
   } else if (seg === "check") {
@@ -174,13 +206,16 @@ function openActivity(id) {
     ${g.foods ? `<div class="as-sec"><small>必吃 · 来自行程表</small><p>${g.foods.map(esc).join("、")}</p></div>` : ""}
     ${g.note || a.note ? `<div class="as-sec"><small>备注</small><p>${esc([a.note, g.note].filter(Boolean).join("　"))}</p></div>` : ""}
     ${stamps.length ? `<div class="as-sec"><small>你的打卡</small><p>✓ 已在这里盖过章</p></div>` : ""}
+    ${a.kind !== "transit" && a.kind !== "flight" ? `<div class="as-sec"><small>怎么去</small><div id="actNav"><div class="nav-row"><span class="as-hint">正在准备导航…</span></div></div><button class="btn sm taxi-btn" data-act="taxi">🚕 给司机看</button></div>` : ""}
     <div class="as-btns">
       ${canCheck && a.status !== "removed" ? `<button class="btn ink full" data-act="checkin">${ic("stamp")} 抵达打卡 · 盖章</button>` : ""}
       <div class="row"><button class="btn" data-act="done">${a.status === "done" ? "取消完成" : "✓ 标记完成"}</button><button class="btn" data-act="main">${a.is_main ? "取消主要行程" : "设为主要行程"}</button></div>
       <div class="row"><button class="btn" data-act="rename">改名字 / 备注</button><button class="btn" data-act="time">改时间 / 时长</button>${a.status === "skipped" || a.status === "removed" ? `<button class="btn" data-act="restore">恢复</button>` : ""}<button class="btn warn" data-act="del">删除</button></div>
       <p class="as-hint">${ic("lock-simple")} 主要行程不能被技能卡影响（行程表规则）。</p>
     </div></div>`, { accent: "#3a2c1f" });
+  const nv = sh.querySelector("#actNav"); if (nv) import("../lib/tools.js").then(async TL => { const L = await TL.navLinks(a.title, a.city || cityOf(a.date), a); const g0 = guideFor(a.city || cityOf(a.date)); if (nv.isConnected) nv.innerHTML = TL.navHTML(L, (g0 && ((g0.w && g0.w.cc) || g0.cc)) || "CN"); });
   bind(sh, {
+    taxi: () => { closeSheet(); import("../lib/tools.js").then(TL => setTimeout(() => TL.openTaxiCard(a), 250)); },
     checkin: () => { closeSheet(); openCheckin({ name: a.title, city: a.city, date: a.date, kind: "place", activityId: a.id, activityKind: a.kind }); },
     done: async () => { const done = a.status !== "done"; try { await api.updateActivity(a.id, { status: done ? "done" : "planned", done_by: done ? api.me.id : null, done_at: done ? new Date().toISOString() : null }); sfx[done ? "stamp" : "tap"](); closeSheet(); } catch (e) { toast("没能保存"); } },
     main: async () => { try { await api.updateActivity(a.id, { is_main: !a.is_main }); closeSheet(); } catch (e) { toast("没能保存"); } },
@@ -211,7 +246,7 @@ function openAdd(prefill) {
   let kind = "sight"; const getDur = wireDur(sh, "addDur");
   sh.querySelectorAll("[data-sug]").forEach(b => b.onclick = () => { $("addN").value = b.dataset.sug; sfx.tap(); });
   sh.querySelectorAll("#addK [data-k]").forEach(b => b.onclick = () => { kind = b.dataset.k; sh.querySelectorAll("#addK button").forEach(x => x.classList.toggle("on", x === b)); });
-  bind(sh, { save: async () => { const n = $("addN").value.trim(), t = $("addT").value; if (!n || !t) return toast("写上时间和地点"); const gsp = guideSpot(n); try { await api.addActivity({ date: d, time: t, title: n, city, kind, dur: getDur(), source: "added", ...(gsp && gsp.ll ? { lat: gsp.ll[0], lng: gsp.ll[1] } : {}) }); sfx.stamp(); closeSheet(); toast(`「${n}」已加入 Day ${dayIndex(d)}`); if (prefill && prefill.after) prefill.after(n); } catch (e) { toast("没能保存"); } } });
+  bind(sh, { save: async () => { const n = $("addN").value.trim(), t = $("addT").value; if (!n || !t) return toast("写上时间和地点"); const gsp = guideSpot(n); try { await api.addActivity({ date: d, time: t, title: n, city, kind, dur: getDur(), source: "added", ...(gsp && gsp.ll ? { lat: gsp.ll[0], lng: gsp.ll[1] } : {}) }); sfx.stamp(); closeSheet(); toast(T(`「${n}」已加入第 ${dayIndex(d)} 天`, `"${n}" added to day ${dayIndex(d)}`)); if (prefill && prefill.after) prefill.after(n); } catch (e) { toast("没能保存"); } } });
 }
 export { openAdd };
 
@@ -237,13 +272,45 @@ function guideHTML() {
   const front = c => c.kind === "lore" ? `<div class="gk-lore"><i class="gk-enso"></i><b>${esc(c.n)}</b><small>${esc(g.name)}</small></div>`
     : `<div class="gk-art">${c.kind === "food" ? foodArt(c.n) : doodle(doodleFor(c.n, "place"), { seed: c.n.length + 3 })}</div><b>${esc(c.n)}</b>${c.e ? `<em>${esc(c.e)}</em>` : ""}${c.t ? `<span class="gk-tag">${esc(c.t)}</span>` : ""}${c.kind === "exp" && c.got ? `<span class="gk-got">已拿到印记</span>` : ""}`;
   const back = c => `<small class="gk-k">${esc(c.n)}</small><p>${esc(c.d || "")}</p>${c.tip ? `<p class="gk-tip">${esc(c.tip)}</p>` : ""}<div class="gk-btns">${c.kind === "place" ? (inPlan(c.n) ? `<small>已在行程里</small>` : `<button class="btn sm" data-addplan="${esc(c.n)}">加入行程</button>`) : ""}${c.kind === "exp" ? (c.got ? `<small>已完成</small>` : `<button class="btn sm ink" data-exp="${esc(c.n)}">我体验了</button>`) : ""}${c.mine ? `<button class="btn sm" data-delc="${c.id}">删除</button>` : ""}</div>`;
+  h += `<div class="gs"><input class="inp gs-in" id="gSearch" type="search" placeholder="搜攻略：地方、美食、传说…" value="${esc(gQuery)}" autocomplete="off"><div class="gs-res" id="gResults"></div></div>`;
   h += `<div class="gk-tabs">${decks.map(([k, l, arr]) => `<button class="${k === gDeck ? "on" : ""}" data-gdeck="${k}">${l}<i>${arr.length}</i></button>`).join("")}</div>
     <div class="gk"><div class="gk-rail" id="gkRail">${cards.map((c, i) => `<div class="gk-slot"><div class="gk-card" data-gi="${i}"><div class="gk-face gk-front">${front(c)}<span class="gk-hint">轻点翻过来</span></div><div class="gk-face gk-back">${back(c)}</div></div></div>`).join("") || `<p class="empty">这一叠还是空的。</p>`}</div><div class="gk-dots" id="gkDots">${cards.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div><p class="gk-idx" id="gkIdx">${cards.length ? `1 / ${cards.length}` : ""}</p></div>
     <div class="tp-actions"><button class="btn" data-act="gadd">＋ 自己加一个地方或美食</button></div>
     <p class="col-note">攻略内容是出发前整理的资料，开放时间和价格以现场为准。</p>`;
   return h;
 }
+/* 攻略搜索: every place, dish, story and experience in every guide (and your own), not just this city */
+let gQuery = "", gJump = null;
+function guideIndex() {
+  const out = [], trip = new Set(tripCityNames());
+  GUIDES.forEach(g => {
+    g.spots.forEach((x, i) => out.push({ city: g.name, deck: "places", i, n: x.n, e: x.e, d: x.d, tip: x.tip, kind: "必去", inTrip: trip.has(g.name) }));
+    g.foods.forEach((x, i) => out.push({ city: g.name, deck: "foods", i: i, n: x.n, e: x.e, d: x.d, tip: x.where, kind: "必吃", inTrip: trip.has(g.name), food: true }));
+    expsFor(g.id).forEach((x, i) => out.push({ city: g.name, deck: "exps", i, n: x.n, d: x.d, kind: "体验", inTrip: trip.has(g.name) }));
+  });
+  customs.forEach(c => out.push({ city: c.city, deck: c.kind === "food" ? "foods" : "places", mine: c.id, n: c.name, d: c.note || "", kind: "自己加的", inTrip: true, food: c.kind === "food" }));
+  return out;
+}
+function searchGuide(q) {
+  q = q.trim().toLowerCase(); if (!q) return [];
+  const hit = x => [x.n, x.e, x.d, x.city, x.tip].some(v => v && String(v).toLowerCase().includes(q));
+  const score = x => (x.n.toLowerCase().includes(q) ? 0 : 2) + (x.inTrip ? 0 : 1);
+  return guideIndex().filter(hit).sort((a, b) => score(a) - score(b)).slice(0, 24);
+}
+function paintSearch(root) {
+  const box = root.querySelector("#gResults"); if (!box) return;
+  const R = searchGuide(gQuery);
+  box.innerHTML = !gQuery.trim() ? "" : R.length ? R.map((x, k) => `<button class="gs-r" data-k="${k}"><span class="gs-art">${x.food ? foodArt(x.n) : doodle(doodleFor(x.n, "place"), { seed: x.n.length + 3 })}</span><span class="gs-t"><b>${esc(x.n)}</b><small>${esc(x.city)} · ${esc(x.kind)}${x.inTrip ? "" : " · 不在这趟行程"}</small></span></button>`).join("") : `<p class="gs-none">没找到「${esc(gQuery)}」，可以用下面的按钮自己加一个</p>`;
+  box.querySelectorAll(".gs-r").forEach(b => b.onclick = () => { const x = R[+b.dataset.k];
+    if (x.inTrip) { gCity = x.city; gDeck = x.deck; gQuery = ""; gJump = x.mine ? null : { deck: x.deck, n: x.n }; sfx.tap(); render(); return; }
+    openSheet(`<div class="as"><small class="as-k">${esc(x.city)} · ${esc(x.kind)}</small><h3>${esc(x.n)}</h3>${x.e ? `<p class="as-hint">${esc(x.e)}</p>` : ""}<p>${esc(x.d || "")}</p>${x.tip ? `<p class="as-hint">${esc(x.tip)}</p>` : ""}<p class="as-hint">这座城市不在这趟行程里。</p><div class="as-btns"><button class="btn ink full" data-act="close">知道了</button></div></div>`);
+    bind(document.querySelector(".usheet.on") || document, { close: closeSheet }); });
+}
 function wireGuide(root) {
+  const gi = root.querySelector("#gSearch"); if (gi) { let t; gi.oninput = () => { gQuery = gi.value; clearTimeout(t); t = setTimeout(() => paintSearch(root), 120); }; if (gQuery) paintSearch(root); }
+  if (gJump) { const rail = root.querySelector("#gkRail"), cards = [...root.querySelectorAll(".gk-card")], j = gJump; gJump = null;
+    const idx = cards.findIndex(c => (c.querySelector(".gk-front b") || {}).textContent === j.n);
+    if (rail && idx >= 0) requestAnimationFrame(() => { rail.scrollLeft = idx * rail.clientWidth; setTimeout(() => cards[idx].classList.add("flip"), 350); }); }
   root.querySelectorAll("[data-gdeck]").forEach(b => b.onclick = () => { gDeck = b.dataset.gdeck; sfx.tap(); render(); });
   root.querySelectorAll(".gk-card").forEach(c => c.onclick = e => { if (e.target.closest("button")) return; c.classList.toggle("flip"); sfx.flip ? sfx.flip() : sfx.tap(); });
   const rail = root.querySelector("#gkRail"); if (rail) { let t; rail.addEventListener("scroll", () => { clearTimeout(t); t = setTimeout(() => { const i = Math.round(rail.scrollLeft / rail.clientWidth); root.querySelectorAll("#gkDots i").forEach((d, k) => d.classList.toggle("on", k === i)); const idx = root.querySelector("#gkIdx"); if (idx) idx.textContent = `${i + 1} / ${rail.children.length}`; }, 60); }, { passive: true }); }

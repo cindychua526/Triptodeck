@@ -8,7 +8,8 @@ export const soundOn = () => on;
 export function onSoundChange(f) { listeners.add(f); return () => listeners.delete(f); }
 export function setSound(v) { on = v; try { localStorage.setItem("td-sound", v ? "on" : "off"); } catch (e) {} listeners.forEach(f => f(v)); if (v) { unlock(); sfx.click(); } }
 
-const SILENT = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+/* half a second of real silence: a zero-length clip on loop makes the browser spin (battery drain) */
+const SILENT = "data:audio/wav;base64,UklGRsQPAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YaAPAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA";
 function ctx() { try { if (!AC) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return null; AC = new C(); } } catch (e) { return null; } return AC; }
 let keep = null;
 function keepAlive() {
@@ -145,3 +146,65 @@ export function cardFx(k) {
     default: sfx.success();
   }
 }
+
+/* ---------- 氛围声 · rain and snow you can hear ----------
+   rain: soft steady patter (filtered noise) + little drops on the roof + a far-off thunder now and then
+   snow: a hush of wind that rises and falls + a tiny bell once in a while
+   quiet on purpose; full level on the 今日 page, softer elsewhere, silent when the app is hidden or sound is off */
+let amb = null;
+export const ambientOn = () => { try { return localStorage.getItem("td-amb") !== "off"; } catch (e) { return true; } };
+export function setAmbientOn(v) { try { localStorage.setItem("td-amb", v ? "on" : "off"); } catch (e) {} if (amb) ambientLevel(amb.level); }
+function noiseBuf(c, sec = 4) { const n = c.sampleRate * sec, b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0); let l = 0;
+  for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; l = (l + .02 * w) / 1.02; d[i] = l * 3.5 + w * .15; } return b; }   // soft, brownish noise
+export function ambient(kind) {
+  if (amb && amb.kind === kind) return; stopAmbient(); if (!kind) return;
+  const c = ctx(); if (!c) return;
+  const master = c.createGain(); master.gain.value = 0; master.connect(c.destination);
+  const src = c.createBufferSource(); src.buffer = noiseBuf(c); src.loop = true;
+  const f = c.createBiquadFilter(), bed = c.createGain(); const timers = [];
+  if (kind === "rain") { f.type = "lowpass"; f.frequency.value = 2200; f.Q.value = .3; bed.gain.value = .55; }
+  else if (kind === "dusk" || kind === "night" || kind === "fire") { f.type = kind === "fire" ? "bandpass" : "lowpass"; f.frequency.value = kind === "fire" ? 900 : 500; f.Q.value = .5; bed.gain.value = kind === "night" ? .18 : kind === "fire" ? .12 : .22; }
+  else { f.type = "bandpass"; f.frequency.value = 420; f.Q.value = .9; bed.gain.value = .5;
+    const lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = .07; lg.gain.value = 220; lfo.connect(lg).connect(f.frequency); lfo.start();
+    const lfo2 = c.createOscillator(), lg2 = c.createGain(); lfo2.frequency.value = .045; lg2.gain.value = .25; lfo2.connect(lg2).connect(bed.gain); lfo2.start(); timers.push({ stop: () => { lfo.stop(); lfo2.stop(); } }); }
+  src.connect(f).connect(bed).connect(master); src.start();
+  const out = master;
+  const drop = () => { if (!amb) return; const t = c.currentTime, s = c.createBufferSource(), n = Math.floor(c.sampleRate * .03), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); s.buffer = b;
+    const bp = c.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2500 + Math.random() * 4000; bp.Q.value = 4; const g = c.createGain(); g.gain.value = .12 + Math.random() * .25;
+    s.connect(bp).connect(g).connect(out); s.start(t); };
+  const thunder = () => { if (!amb) return; const t = c.currentTime, s = c.createBufferSource(); s.buffer = noiseBuf(c, 5); const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 140; const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1.4, t + .8); g.gain.exponentialRampToValueAtTime(.001, t + 4.5); s.connect(lp).connect(g).connect(out); s.start(t); s.stop(t + 5); };
+  const bell = () => { if (!amb) return; const t = c.currentTime, f0 = [1760, 1976, 2349, 2637][Math.floor(Math.random() * 4)];
+    [1, 2.4].forEach((m, i) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = f0 * m; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.05 / (1 + i * 2), t + .01); g.gain.exponentialRampToValueAtTime(.0001, t + 2.4); o.connect(g).connect(out); o.start(t); o.stop(t + 2.5); }); };
+  const loop = (fn, a, b) => { const go = () => { if (!amb) return; fn(); amb.t.push(setTimeout(go, a + Math.random() * (b - a))); }; amb.t.push(setTimeout(go, a + Math.random() * (b - a))); };
+  /* 黄昏: birds settling + a far temple bell · 夜色: crickets · 祝融 (last day): a small fire crackling, a firework far away now and then */
+  const bird = () => { if (!amb) return; const t = c.currentTime, n = 2 + Math.floor(Math.random() * 3), f0 = 2600 + Math.random() * 1600;
+    for (let k = 0; k < n; k++) { const o = c.createOscillator(), g = c.createGain(), s0 = t + k * (.09 + Math.random() * .05); o.type = "sine"; o.frequency.setValueAtTime(f0, s0); o.frequency.exponentialRampToValueAtTime(f0 * (1.25 + Math.random() * .3), s0 + .06);
+      g.gain.setValueAtTime(0, s0); g.gain.linearRampToValueAtTime(.06, s0 + .01); g.gain.exponentialRampToValueAtTime(.0001, s0 + .08); o.connect(g).connect(out); o.start(s0); o.stop(s0 + .1); } };
+  const gong = () => { if (!amb) return; const t = c.currentTime; [1, 2.76, 5.4].forEach((m, k) => { const o = c.createOscillator(), g = c.createGain(); o.frequency.value = 180 * m; g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.09 / (1 + k * 1.6), t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + 5 / (1 + k)); o.connect(g).connect(out); o.start(t); o.stop(t + 5.2); }); };
+  const cricket = () => { if (!amb) return; const t = c.currentTime, f0 = 4200 + Math.random() * 900, n = 3 + Math.floor(Math.random() * 4);
+    for (let k = 0; k < n; k++) { const o = c.createOscillator(), g = c.createGain(), s0 = t + k * .055; o.frequency.value = f0; g.gain.setValueAtTime(0, s0); g.gain.linearRampToValueAtTime(.035, s0 + .008); g.gain.linearRampToValueAtTime(0, s0 + .035); o.connect(g).connect(out); o.start(s0); o.stop(s0 + .05); } };
+  const crackle = () => { if (!amb) return; const t = c.currentTime, s = c.createBufferSource(), n = Math.floor(c.sampleRate * .012), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 4); s.buffer = b; const hp = c.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1500; const g = c.createGain(); g.gain.value = .2 + Math.random() * .3; s.connect(hp).connect(g).connect(out); s.start(t); };
+  const boom = () => { if (!amb) return; const t = c.currentTime, s = c.createBufferSource(); s.buffer = noiseBuf(c, 2); const lp = c.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 400; const g = c.createGain();
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.8, t + .03); g.gain.exponentialRampToValueAtTime(.001, t + 1.6); s.connect(lp).connect(g).connect(out); s.start(t); s.stop(t + 2); setTimeout(() => { for (let k = 0; k < 6; k++) setTimeout(crackle, k * 60 + Math.random() * 80); }, 350); };
+  amb = { kind, c, master, src, timers, t: [], level: 1 };
+  if (kind === "rain") { loop(drop, 90, 320); loop(thunder, 35000, 90000); }
+  else if (kind === "snow") loop(bell, 6000, 14000);
+  else if (kind === "dusk") { loop(bird, 1800, 6000); loop(gong, 25000, 60000); }
+  else if (kind === "night") loop(cricket, 350, 1400);
+  else if (kind === "fire") { loop(crackle, 80, 600); loop(boom, 20000, 50000); }
+  ambientLevel(1);
+}
+export function ambientLevel(x) {
+  if (!amb) return; amb.level = x; const c = amb.c, want = on && ambientOn() && !document.hidden ? ({ rain: .09, snow: .07, dusk: .08, night: .07, fire: .07 }[amb.kind] || .07) * x : 0;
+  if (want > 0 && c.state !== "running") c.resume().catch(() => {});
+  amb.master.gain.cancelScheduledValues(c.currentTime); amb.master.gain.setTargetAtTime(want, c.currentTime, .6);
+}
+export function stopAmbient() {
+  if (!amb) return; const a = amb; amb = null; a.t.forEach(clearTimeout);
+  try { a.master.gain.setTargetAtTime(0, a.c.currentTime, .3); setTimeout(() => { try { a.src.stop(); a.timers.forEach(x => x.stop()); a.master.disconnect(); } catch (e) {} }, 1500); } catch (e) {}
+}
+onSoundChange(() => amb && ambientLevel(amb.level));
+addEventListener("visibilitychange", () => amb && ambientLevel(amb.level));

@@ -13,6 +13,7 @@ function paint() {
 addEventListener("online", () => { paint(); setTimeout(paint, 3000); });
 addEventListener("offline", () => { paint(); toast(t("没有网络 · 先存在手机里，有网再同步", "No signal · saved on this phone, will sync later")); });
 document.addEventListener("td-queue", paint);
+document.addEventListener("td-queue-full", () => toast(t("手机存储满了，这条改动没能存下来。连上网再试一次", "Phone storage is full, this change could not be saved. Try again online")));
 setTimeout(paint, 1500);
 if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost") && !import.meta.env.DEV) {
   addEventListener("load", () => { try { navigator.serviceWorker.register("/sw.js").catch(() => {}); } catch (e) {} });

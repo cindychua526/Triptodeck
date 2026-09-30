@@ -2,7 +2,7 @@
 import { ic } from "../lib/icons.js";
 /* leaflet is only loaded the first time a map is shown, so the app opens faster */
 let L = null, loadingL = null;
-const loadLeaflet = () => loadingL || (loadingL = Promise.all([import("leaflet"), import("leaflet/dist/leaflet.css")]).then(([m]) => { L = m.default || m; return L; }));
+const loadLeaflet = () => loadingL || (loadingL = Promise.all([import("leaflet"), import("leaflet/dist/leaflet.css")]).then(([m]) => { L = m.default || m; return L; }).catch(e => { loadingL = null; throw e; }));
 import { api } from "../lib/api.js";
 import { esc, toMin, shortDate, weekday, today, wait } from "../lib/util.js";
 import { toast } from "../lib/ui.js";
@@ -17,7 +17,7 @@ const SKIP = /^(早餐|午餐|晚餐|回酒店|回民宿|CHECK OUT)$|^(打车|�
 const PI = Math.PI, A = 6378245.0, EE = 0.00669342162296594323;
 function tLat(x, y) { let r = -100 + 2 * x + 3 * y + .2 * y * y + .1 * x * y + .2 * Math.sqrt(Math.abs(x)); r += (20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2 / 3; r += (20 * Math.sin(y * PI) + 40 * Math.sin(y / 3 * PI)) * 2 / 3; r += (160 * Math.sin(y / 12 * PI) + 320 * Math.sin(y * PI / 30)) * 2 / 3; return r; }
 function tLng(x, y) { let r = 300 + x + 2 * y + .1 * x * x + .1 * x * y + .1 * Math.sqrt(Math.abs(x)); r += (20 * Math.sin(6 * x * PI) + 20 * Math.sin(2 * x * PI)) * 2 / 3; r += (20 * Math.sin(x * PI) + 40 * Math.sin(x / 3 * PI)) * 2 / 3; r += (150 * Math.sin(x / 12 * PI) + 300 * Math.sin(x / 30 * PI)) * 2 / 3; return r; }
-function toGcj(lat, lng) { let dLat = tLat(lng - 105, lat - 35), dLng = tLng(lng - 105, lat - 35); const rl = lat / 180 * PI; let m = Math.sin(rl); m = 1 - EE * m * m; const s = Math.sqrt(m); dLat = dLat * 180 / ((A * (1 - EE)) / (m * s) * PI); dLng = dLng * 180 / (A / s * Math.cos(rl) * PI); return [lat + dLat, lng + dLng]; }
+export function toGcj(lat, lng) { let dLat = tLat(lng - 105, lat - 35), dLng = tLng(lng - 105, lat - 35); const rl = lat / 180 * PI; let m = Math.sin(rl); m = 1 - EE * m * m; const s = Math.sqrt(m); dLat = dLat * 180 / ((A * (1 - EE)) / (m * s) * PI); dLng = dLng * 180 / (A / s * Math.cos(rl) * PI); return [lat + dLat, lng + dLng]; }
 function toWgs(lat, lng) { const [a, b] = toGcj(lat, lng); return [lat * 2 - a, lng * 2 - b]; }
 
 let map = null, el = null, tiles = null, layers = null, provider = localStorage.getItem("td-map-tiles") || "amap", dark = localStorage.getItem("td-map-dark") !== "0";
@@ -51,7 +51,7 @@ function ensureMap() {
 }
 let lastKey = "";
 export function mountMap(holder, opts) {
-  if (!L) { loadLeaflet().then(() => { if (holder && holder.isConnected) mountMap(holder, opts); }); return; }
+  if (!L) { loadLeaflet().then(() => { if (holder && holder.isConnected) mountMap(holder, opts); }).catch(() => { if (holder && holder.isConnected) holder.innerHTML = `<p class="as-hint" style="padding:20px;text-align:center">地图没能加载（可能没有网络），有网后再点一次「地图」。</p>`; }); return; }
   return mountMap0(holder, opts);
 }
 function mountMap0(holder, { acts, days, day, onCheckin }) {
@@ -110,8 +110,8 @@ export function mapTools() {
     setProvider(p) { provider = p; localStorage.setItem("td-map-tiles", p); setTiles(); lastKey = ""; },
     setDark(v) { dark = v; localStorage.setItem("td-map-dark", v ? "1" : "0"); el && el.classList.toggle("dark", v); },
     setEdit(v) { editPins = v; lastKey = "x"; },
-    place(a) { placing = a; el.classList.add("placing"); toast(`在地图上点一下，放置「${a.title}」`); },
-    locate() { if (!navigator.geolocation) return toast("拿不到定位"); navigator.geolocation.getCurrentPosition(p => { const ll = fwd(p.coords.latitude, p.coords.longitude); if (meMarker) meMarker.remove(); meMarker = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 2, fillColor: "#c8472f", fillOpacity: 1 }).addTo(map); map.setView(ll, 15); }, () => toast("没有拿到定位"), { timeout: 8000 }); }
+    place(a) { if (!map) return toast("地图还在加载，稍等一下"); placing = a; el.classList.add("placing"); toast(`在地图上点一下，放置「${a.title}」`); },
+    locate() { if (!map || !L) return toast("地图还在加载，稍等一下"); if (!navigator.geolocation) return toast("拿不到定位"); navigator.geolocation.getCurrentPosition(p => { const ll = fwd(p.coords.latitude, p.coords.longitude); if (meMarker) meMarker.remove(); meMarker = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 2, fillColor: "#c8472f", fillOpacity: 1 }).addTo(map); map.setView(ll, 15); }, () => toast("没有拿到定位"), { timeout: 8000 }); }
   };
 }
 export function missingCoords(acts, day, days) { const show = day === "all" ? days : [day]; return acts.filter(a => show.includes(a.date) && a.status !== "removed" && a.kind !== "transit" && !SKIP.test(a.title) && !coordOf(a)); }

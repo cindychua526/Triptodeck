@@ -39,7 +39,10 @@ export async function renderToday() {
       <div class="hb-sun r"><svg viewBox="0 0 24 24"><path d="M4 16h16M8 16a4 4 0 0 1 8 0M12 7V3M6 8l1.5 1.5M18 8l-1.5 1.5"/></svg><small>${sun ? sun.set : "--:--"}</small></div>
       <div class="hb-wd">${EN_WD[dt.getDay()]}</div><div class="hb-num">${dt.getDate()}</div><div class="hb-my"><span>${EN_M[dt.getMonth()]}</span><span>${dt.getFullYear()}</span></div>
       <div class="hb-art">${doodle(sk, { sketch: true, accent: skc, seed: dt.getDate() })}</div>
-      <div class="hb-wx"><b>${WX && WX.temp != null ? Math.round(WX.hi ?? WX.temp) + "°" : "--"}</b><span>/ ${WX && WX.lo != null ? Math.round(WX.lo) + "°" : "--"}</span><small>${esc(gg ? gg.en : city || "")}${WX ? " · " + esc(WX.text || "") : ""}</small></div>
+      ${(() => { /* no live weather (offline / service down): use the last one we saw for today, else just the city */ let W = WX && (WX.hi != null || WX.temp != null) ? WX : null, old = false;
+        if (!W) { try { const c = JSON.parse(localStorage.getItem(`td-wx:${api.trip.id}:${d}`) || "null"); if (c && c.hi != null) { W = { hi: c.hi, lo: c.lo, text: c.t }; old = true; } } catch (e) {} }
+        return W ? `<div class="hb-wx"><b>${Math.round(W.hi ?? W.temp)}°</b><span>/ ${W.lo != null ? Math.round(W.lo) + "°" : ""}</span><small>${esc(gg ? gg.en : city || "")}${W.text ? " · " + esc(W.text) : ""}${old ? T(" · 稍早", " · earlier") : ""}</small></div>`
+          : `<div class="hb-wx nowx"><small>${esc(gg ? gg.en : city || "")}</small></div>`; })()}
       <div class="hb-src">${WX ? esc((WX.source || "").replace("（备用）", "")) : T("部署后显示天气", "Weather after deploy")}</div>
       <button class="hb-note" id="tsNote" aria-label="${T("写日记", "Write")}">${note ? `<span class="hb-note-t">${esc(note.slice(0, 26))}</span>` : `<span class="hb-note-t muted">${T("写几句今天", "A few lines about today")}</span>`}<em>✎</em></button>
       <span class="hb-washi"></span><span class="hb-seal">${d === end ? "终" : "旅"}</span>
@@ -58,10 +61,12 @@ export async function renderToday() {
   const B2 = await import("./budget.js"), todaySpend = B2.exps.filter(e => e.date === d && !e.prepaid), tot = todaySpend.reduce((q, e) => q + B2.myShare(e), 0);
   let ritEl = el.querySelector("#ritSlot"); if (!ritEl) { ritEl = document.createElement("div"); ritEl.id = "ritSlot"; el.appendChild(ritEl); }
   let live = ""; try { const N = await import("../lib/notices.js"); live = N.countdownHTML(); const fx = (await api.effects()).filter(x => x.target_date === d && !x.resolved && x.card !== "X" && CARD[x.card]); if (fx.length) live += `<div class="ooc-banner"><i>失控</i><div>${fx.map(x => `<b>${x.card} · ${CARD[x.card] ? CARD[x.card].name : ""}</b><span>${esc(((CARD[x.card] && CARD[x.card].ooc) || x.description || "").replace(/明天/g, "今天"))}${x.detail ? "：" + esc(x.detail) : ""}</span>`).join("")}<small class="ooc-tap">点一下，重看失控 ›</small></div></div>`; } catch (e) {}
-  ritEl.innerHTML = live + `<div class="rit"><div class="rit-h"><small>SLOW DOWN</small><b>${T("今天的五件小事", "Five small things today")}</b><span>${R.filter(r => r[2]).length}/${R.length}</span></div>
+  const TL = await import("../lib/tools.js");
+  ritEl.innerHTML = live + TL.toolsHTML() + `<div class="rit"><div class="rit-h"><small>SLOW DOWN</small><b>${T("今天的五件小事", "Five small things today")}</b><span>${R.filter(r => r[2]).length}/${R.length}</span></div>
     ${R.map(([k, l, done, i]) => `<button class="rit-row${done ? " done" : ""}" data-rit="${k}"><i>${done ? ic("check") : ""}</i><span>${l}</span>${ic(i === "envelope" ? "ticket" : i)}</button>`).join("")}</div>
     <button class="rcp" data-rit="budget"><small>TODAY'S RECEIPT · ${d.slice(5).replace("-", ".")}</small>${todaySpend.length ? todaySpend.slice(0, 4).map(e => `<span><b>${esc(e.note || e.category)}</b><em>${B2.money(B2.myShare(e))}</em></span>`).join("") : `<span><b>${T("今天还没花钱", "Nothing spent yet")}</b><em>—</em></span>`}<strong><b>${T("今日合计", "Today")}</b><em>${B2.money(tot)}</em></strong></button>${await extrasHTML(d, days, gg)}`;
   el.querySelectorAll("[data-rit]").forEach(b => b.onclick = () => { const k = b.dataset.rit; mus.pluck(2, .03); if (k === "fortune") document.getElementById("stage")?.scrollIntoView({ behavior: "smooth", block: "center" }); else if (k === "note") openDiary(inTrip ? d : null); else if (k === "stamp") window.tdGo && window.tdGo("trip"); else if (k === "deck") window.tdGo && window.tdGo("deck"); else if (k === "spend") window.tdGo && window.tdGo("tear"); else if (k === "budget") window.tdGo && window.tdGo("budget"); else if (k === "poster") { localStorage.setItem("td-poster-seen:" + api.trip.id, "1"); import("./collection.js").then(m => m.openPoster()); } else if (k === "letter") openLetter(d); else if (k === "moment") askMoment(d); });
+  TL.wireTools(el);
   el.querySelectorAll("[data-atm]").forEach(b => b.onclick = () => import("../lib/atmos.js").then(m => toast(m.ATMOS[b.dataset.atm].hint)));
   $("tsNote").onclick = () => openDiary(inTrip ? d : null);
   el.querySelector(".hb-art").onclick = () => playMotion(weatherMotion(WX), { temp: WX && WX.temp != null ? Math.round(WX.temp) : null });

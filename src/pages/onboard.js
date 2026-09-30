@@ -8,7 +8,9 @@ import { newTripForm } from "./trips.js";
 export function onboard() {
   return new Promise(resolve => {
     const el = $("onboard"); el.className = "onboard on";
-    let step = "name", name = "";
+    /* came back half-way (name given, no trip yet): skip straight to the trip step */
+    let me0 = null; try { me0 = api.me; } catch (e) {}
+    let step = me0 && me0.name ? "trip" : "name", name = (me0 && me0.name) || "";
     const draw = (err) => {
       el.innerHTML = `<div class="ob-card">
         <div class="ob-folder"><i class="obf-pass">BOARDING · HOME → TRIP</i><span class="obf-label"><small>Archive</small><em>No. Travel - 001</em><b>MY NEXT JOURNEY</b></span><i class="obf-tape"></i></div>

@@ -53,6 +53,23 @@ const Z2E = {
   "攻略内容是出发前整理的资料，开放时间和价格以现场为准。": "Guide notes were collected before the trip — check opening hours and prices on site.",
   "入境章": "Entry seal", "体验印记": "Experience seal", "计划外": "Unplanned", "收进手账": "Keep"
 };
+/* added with the toolbox / dark mode / walkthrough fixes */
+Object.assign(Z2E, {
+  "翻面": "Flip", "旅途愉快": "Bon voyage", "外观": "Appearance", "跟随手机": "System", "浅色": "Light", "深色": "Dark",
+  "深色适合晚上在车里、床上看。印章、票和护照会保持原来的纸色。": "Dark is easier on the eyes at night. Stamps, tickets and the passport keep their paper colours.",
+  "天气氛围的背景声（雨、雪、黄昏、夜晚）": "Ambient weather sounds (rain, snow, dusk, night)", "明天还没有安排，留给惊喜。": "Nothing planned for tomorrow — room for surprises.", "看明天 ›": "See tomorrow ›",
+  "今天 · 小结": "Today · so far", "明天": "Tomorrow", "一位旅伴": "a buddy", "我的身份码": "My ID code",
+  "换手机、删了 App 重装、清了浏览器数据，都会变成「新的人」。记下这个码，在新的那边输入，就能把自己找回来，所有打卡、账和牌都跟着回来。": "A new phone, a reinstall or cleared browser data makes you a \"new person\". Keep this code and enter it there to get yourself back — check-ins, expenses and cards included.",
+  "有字的一面是正面：左边 / 吃 / 进　背面：右边 / 不吃 / 不进": "Heads (the side with characters): left / eat / go in · Tails: right / skip / don't",
+  "报警": "Police", "急救": "Ambulance", "火警": "Fire", "交通事故": "Traffic accident", "高德导航": "Amap", "Google 地图": "Google Maps", "Apple 地图": "Apple Maps",
+  "回忆放映": "Trip replay", "打印成相册": "Print as a book", "旅途工具箱": "Toolbox", "给司机看": "Taxi card", "汇率": "Converter", "当地话": "Phrases", "紧急": "SOS"
+});
+const WDF = { 一: "Monday", 二: "Tuesday", 三: "Wednesday", 四: "Thursday", 五: "Friday", 六: "Saturday", 日: "Sunday" };
+const WDS = { 一: "Mon", 二: "Tue", 三: "Wed", 四: "Thu", 五: "Fri", 六: "Sat", 日: "Sun" };
+/* one " · " segment at a time, for headers like "DAY 2 · 09.30 周三 · 今天" */
+const PART_RULES = [[/^(\d\d\.\d\d) 周([一二三四五六日])$/, (m, d, a) => `${d} ${WDS[a]}`], [/^周([一二三四五六日])$/, (m, a) => WDS[a]], [/^你 (RM [\d,.]+)$/, "you $1"], [/^今天$/, "Today"], [/^明天$/, "Tomorrow"], [/^昨天$/, "Yesterday"]];
+const partEn = p => { const t = p.trim(); if (!HAN_P.test(t)) return p; const h = Z2E[t] ?? (NAMES && NAMES[t]) ?? MORE[t]; if (h != null) return h; for (const [re, rep] of PART_RULES) if (re.test(t)) return t.replace(re, rep); return null; };
+const HAN_P = /[\u3400-\u9fff]/;
 let NAMES = null, MORE = {};
 async function names() {
   if (NAMES) return NAMES;
@@ -78,6 +95,9 @@ const RULES_EN = [
   [/^建议 (.+)$/, (m, a) => "Suggested " + a.replace("小时", "h").replace("分钟", "min").replace("半天", "half a day").replace("一天", "a full day").replace("晚上", "evening")],
   [/^＋ 加入 Day (\d+)$/, "＋ Add to Day $1"], [/^Lv (\d+) 进化 ·.*$/, "Evolves at Lv $1 · check-in +30, food ticket +15, skill +20, care +2"],
 
+  [/^星期([一二三四五六日])$/, (m, a) => WDF[a]], [/^牌堆里还剩 (\d+) 张$/, "$1 cards left in the deck"], [/^还差 (\d+) 个地方就集齐今天的章$/, "$1 more places to complete today's stamps"],
+  [/^✓ (.+) 标记完成$/, (m, a) => `✓ Marked done by ${a === "一位旅伴" ? "a buddy" : a}`], [/^(.+)（你）$/, "$1 (you)"], [/^旅伴 · (\d+) 人$/, "Buddies · $1"], [/^旅伴（(\d+)）$/, "Buddies ($1)"],
+  [/^(\d+) \/ (\d+) 已撕$/, "$1 / $2 torn"], [/^还有 (\d+) 样，在上面的票里左右滑$/, "$1 more — swipe the tickets above"], [/^(.+)还没吃过的$/, (m, a) => `Not tried yet in ${nm(a)}`],
   [/^Day (\d+)$/, "Day $1"], [/^第(\d+)阶段$/, "Stage $1"], [/^(\d+) 人$/, "$1 people"], [/^收集了 (\d+) 张美食票，只有你看得到$/, "$1 food tickets · only you can see them"],
   [/^这趟旅行有 (\d+) 种当地美食等你尝$/, "$1 local dishes to try on this trip"], [/^撕下「(.+)」$/, (m, a) => `Tear "${NAMES[a] || a}"`], [/^已完成 (\d+) \/ (\d+)$/, "Done $1 / $2"],
   [/^周([一二三四五六日])$/, (m, a) => ({ 一: "Mon", 二: "Tue", 三: "Wed", 四: "Thu", 五: "Fri", 六: "Sat", 日: "Sun" })[a]], [/^(\d\d\.\d\d) 周([一二三四五六日])$/, (m, d, a) => d + " " + ({ 一: "Mon", 二: "Tue", 三: "Wed", 四: "Thu", 五: "Fri", 六: "Sat", 日: "Sun" })[a]]
@@ -105,7 +125,7 @@ function toEn(s) {
   const hit = Z2E[tr] ?? (NAMES && NAMES[tr]) ?? MORE[tr]; if (hit != null) return s.replace(tr, hit);
   for (const [re, rep] of RULES_EN) if (re.test(tr)) return s.replace(tr, tr.replace(re, rep));
   // "厦门 · 鼓浪屿" style: translate each part if all parts are known
-  const parts = tr.split(/\s*·\s*/); if (parts.length > 1 && parts.every(p => Z2E[p] || (NAMES && NAMES[p]) || MORE[p] || !HAN.test(p))) return s.replace(tr, parts.map(p => Z2E[p] || (NAMES && NAMES[p]) || MORE[p] || p).join(" · "));
+  const parts = tr.split(/\s*·\s*/); if (parts.length > 1) { const out = parts.map(partEn); if (out.every(x => x != null)) return s.replace(tr, out.join(" · ")); }
   return null;
 }
 const fix = lang === "en" ? toEn : toZh;

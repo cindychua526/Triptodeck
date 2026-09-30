@@ -45,8 +45,19 @@ function frontHTML(s,meta,tw){
       <div class="tk-foot"><span>${meta.date.replace(/-/g,".")}</span>${s.tag&&s.tag!=="美食"?`<em>${s.tag}</em>`:""}</div>
       ${artOrPhoto(s.name,"tk-food")}
     </div>
-    <div class="tk-stub"><b>尝过了</b><small>${c.name}</small></div>${meta.rating?`<div class="tk-rate r-${meta.rating}">${RATE[meta.rating][0]}</div>`:""}
+    <div class="tk-stub"><b>尝过了</b><small>${c.name}</small></div>${meta.rating&&RATE[meta.rating]?`<div class="tk-rate r-${meta.rating}">${RATE[meta.rating][0]}</div>`:""}
   </div>`;
+}
+const MINI_PAL=[["#e8a87c","#fff4e8"],["#8fb8a8","#eef7f2"],["#e6c27a","#fff8e6"],["#d98a8a","#fdf0ef"],["#9aaed6","#f0f3fb"],["#c5a3d1","#f7f0fa"],["#e0976b","#fdf1e9"],["#a7c47f","#f3f8ea"]];
+function hashS(t){ let h=0; for(const ch of String(t)) h=(h*31+ch.charCodeAt(0))|0; return Math.abs(h); }
+function miniHTML(s,w){
+  const [c,bg]=MINI_PAL[hashS(s.name)%MINI_PAL.length], r=(hashS(s.id)%5)-2, rate=w.rating&&RATE[w.rating];
+  return `<div class="tkm" style="--c:${c};--bg:${bg};--r:${r}deg">
+    <div class="tkm-top"><span>${esc(w.serial||"")}</span><span>${(w.date||"").slice(5).replace("-",".")}</span></div>
+    ${PHOTO[s.name]?`<div class="tkm-art photo" style="background-image:url('${PHOTO[s.name]}')"></div>`:`<div class="tkm-art">${foodArt(s.name)}</div>`}
+    <b class="tkm-name">${esc(s.name)}</b><small class="tkm-en">${esc(s.en||"")}</small>
+    <i class="tkm-perf"></i><div class="tkm-stub"><span>尝过了</span><em>${esc(CITY[s.c].name)}</em></div>
+    ${rate?`<span class="tkm-rate r-${w.rating}">${rate[0]}</span>`:""}</div>`;
 }
 function blankHTML(s,tw){
   const c=CITY[s.c], k=COUNTRY[c.k];
@@ -104,6 +115,15 @@ function renderSpots(){
     ${inWallet(s.id)?'<span class="got">✓</span>':''}
     ${PHOTO[s.name]?`<span class="spot-art photo" style="background-image:url('${PHOTO[s.name]}')"></span>`:`<span class="spot-art">${foodArt(s.name)}</span>`}<b>${s.name}</b>${inWallet(s.id)?`<i class="spot-got${inWallet(s.id).rating?" r-"+inWallet(s.id).rating:""}">${inWallet(s.id).rating==="love"?"♥":"✓"}</i>`:""}</button>`).join("");
   box.querySelectorAll(".spot").forEach(b=>b.onclick=()=>setSpot(b.dataset.id));
+  renderTodo();
+}
+/* under the roll: what this city still has for you (tap one to load its ticket) */
+function renderTodo(){
+  const el=$("tearTodo"); if(!el) return;
+  const all=SPOTS.filter(s=>s.c===city), left=all.filter(s=>!inWallet(s.id)), got=all.length-left.length;
+  if(!all.length){ el.innerHTML=""; return; }
+  el.innerHTML=`<div class="tt-h"><b>${esc(CITY[city].name)}还没吃过的</b><span>${got} / ${all.length} 已撕</span></div>${left.length?`<div class="tt-grid">${left.slice(0,12).map(s=>`<button class="tt-i" data-id="${s.id}"><span>${foodArt(s.name)}</span><b>${esc(s.name)}</b>${s.tag&&s.tag!=="美食"?`<small>${esc(s.tag)}</small>`:""}</button>`).join("")}</div>${left.length>12?`<p class="tt-more">还有 ${left.length-12} 样，在上面的票里左右滑</p>`:""}`:`<p class="tt-done">✦ 这座城市的美食票都撕齐了！</p>`}`;
+  el.querySelectorAll(".tt-i").forEach(b=>b.onclick=()=>{ setSpot(b.dataset.id); document.getElementById("pg-tear").scrollTo({top:0,behavior:"smooth"}); });
 }
 function setSpot(id){
   spot=spotById(id);
@@ -278,7 +298,10 @@ function renderWallet(){
     return;
   }
   const tw=Math.round(Math.min(innerWidth*0.86,370));
-  list.innerHTML=shown.map(w=>{ const s=spotById(w.id); return `<div class="w-item${w.id===justAdded?" new":""}" data-id="${w.id}" role="button" aria-label="${s.name}">${frontHTML(s,{date:w.date,serial:w.serial,rating:w.rating},tw)}</div>`; }).join("");
+  /* the wallet shows little stubs in a scrapbook grid, one colour per dish; tap one to take the full ticket out */
+  const byCity={}; shown.forEach(w=>{ const c=CITY[spotById(w.id).c].name; (byCity[c]=byCity[c]||[]).push(w); });
+  const multi=Object.keys(byCity).length>1;
+  list.innerHTML=`<div class="wm">${Object.entries(byCity).map(([c,L])=>`${multi?`<div class="wm-city"><b>${esc(c)}</b><i></i><span>${L.length} 张</span></div>`:""}<div class="wm-grid">${L.map(w=>{ const s=spotById(w.id); return `<div class="w-item wm-item${w.id===justAdded?" new":""}" data-id="${w.id}" role="button" aria-label="${s.name}">${miniHTML(s,w)}</div>`; }).join("")}</div>`).join("")}</div>`;
   justAdded=null;
   list.querySelectorAll(".w-item").forEach(el=>el.addEventListener("click",()=>openFromWallet(el)));
   buddyTickets();
