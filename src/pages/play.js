@@ -25,10 +25,12 @@ export function renderPlay(go) {
   root.insertAdjacentHTML("beforeend", `<div class="sk-sec-h">MORE GAMES <b>一起玩</b></div><div class="g2-grid">
     <button class="g2-t" data-g2="bingo"><span class="g2-art bingo">${Array.from({ length: 9 }, (_, i) => `<i class="${[0, 4, 8, 2].includes(i) ? "on" : ""}"></i>`).join("")}</span><span><b>城市宾果</b><small>每人每天一张 3×3 卡，看到就划掉，连线就宾果</small></span></button>
     <button class="g2-t" data-g2="secret"><span class="g2-art secret"><i>密</i></span><span><b>秘密任务</b><small>早上拆一封只有你知道的任务，晚上 8 点揭晓</small></span></button>
+    <button class="g2-t" data-paper><span class="g2-art news"><i>报</i></span><span><b>每日小报</b><small>把今天发生的事排成一张报纸，可以保存分享</small></span></button>
     <button class="g2-t" data-g2="guess"><span class="g2-art guess">¥?</span><span><b>猜价格</b><small>付钱前大家先猜，最准的人赢，顺手记进账本</small></span></button></div>`);
   root.insertAdjacentHTML("beforeend", `<div class="sk-sec-h">LITTLE SURPRISES <b>小惊喜 · 随手玩</b></div><div class="sp-grid">${GAMES.map(([k, n, d], i) => `<button class="sp-t" data-game="${k}" style="--i:${i}"><span class="sp-ic sp-${k}"></span><b>${n}</b><small>${d}</small></button>`).join("")}</div><p class="col-note">旅途中也会不经意冒出来：下午茶时间、盖完章、天气变了的时候。</p>`);
   root.querySelectorAll("[data-go]").forEach(b => b.onclick = () => go(b.dataset.go));
   root.querySelectorAll("[data-g2]").forEach(b => b.onclick = () => import("./games2.js").then(m => ({ bingo: m.openBingo, secret: m.openSecret, guess: m.openGuess })[b.dataset.g2]()));
+  root.querySelector("[data-paper]").onclick = () => import("./paper.js").then(m => m.openPaper());
   root.querySelector("[data-dice]").onclick = () => import("./dice.js").then(m => m.openDice());
   root.querySelectorAll("[data-game]").forEach(b => b.onclick = () => playMotion(b.dataset.game));
   paintLive(); document.addEventListener("notices", paintLive, { once: false });

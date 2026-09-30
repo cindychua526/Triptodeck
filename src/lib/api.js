@@ -3,6 +3,7 @@
    - local: localStorage (single-device demo when no Supabase keys are set) */
 import { createClient } from "@supabase/supabase-js";
 import { uid } from "./util.js";
+import { offlineWrap, isNetErr, cacheGet, cacheSet } from "./offline.js";
 import { DAYS, CHECKLIST_SEED, TRIP_SEED } from "../data/fujian.js";
 
 const URL_ = import.meta.env.VITE_SUPABASE_URL, KEY_ = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -32,6 +33,10 @@ function cloud() {
   let me = null, trip = null, membership = null, channel = null, members = [], trips = [];
   const need = r => { if (r.error) { const e = new Error(r.error.message); e.code = r.error.code; throw e; } return r.data; };
   async function loadMembers() {
+    try { await loadMembers0(); cacheSet("members:" + trip.id, { members, membership }); }
+    catch (e) { const c = isNetErr(e) && cacheGet("members:" + trip.id); if (!c) throw e; members = c.members || []; membership = c.membership; }
+  }
+  async function loadMembers0() {
     const rows = need(await sb.from("trip_members").select("user_id, joined_at").eq("trip_id", trip.id).order("joined_at"));
     const ids = rows.map(r => r.user_id);
     const ps = ids.length ? need(await sb.from("profiles").select("id, display_name").in("id", ids)) : [];
@@ -45,16 +50,18 @@ function cloud() {
       channel.on("postgres_changes", { event: "*", schema: "public", table: t, filter: `trip_id=eq.${trip.id}` }, async () => { if (t === "trip_members") await loadMembers(); emit(t === "wallet_items" ? "wallet" : t); }));
     channel.subscribe();
   }
-  async function refreshTrips() { const rows = need(await sb.from("trip_members").select("trip_id, trips(*)").eq("user_id", me.id)); trips = rows.map(r => r.trips).filter(Boolean).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date))); return trips; }
+  async function refreshTrips() { try { await refreshTrips0(); cacheSet("trips:" + me.id, trips); } catch (e) { const c = isNetErr(e) && cacheGet("trips:" + me.id); if (!c) throw e; trips = c; } return trips; }
+  async function refreshTrips0() { const rows = need(await sb.from("trip_members").select("trip_id, trips(*)").eq("user_id", me.id)); trips = rows.map(r => r.trips).filter(Boolean).sort((a, b) => String(b.start_date).localeCompare(String(a.start_date))); return trips; }
   async function useTrip(t) { trip = t; try { localStorage.setItem("td-trip", t.id); } catch (e) {} await loadMembers(); subscribe(); emitAll(); }
-  return {
+  const api = {
     mode: "cloud",
     get me() { return me; }, get trip() { return trip; }, get members() { return members; }, get trips() { return trips; },
     get membership() { return trip ? { total_budget: +(trip.total_budget ?? (membership && membership.total_budget) ?? 3000), budget_mode: trip.budget_mode || "strict", currency: (membership && membership.currency) || localStorage.getItem("td-home-cur") || "MYR", cny_rate: +(trip.cny_rate ?? 0.6) } : null; },
     async init() {
       const { data: { session } } = await sb.auth.getSession(); if (!session) return null;
-      const p = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-      me = { id: session.user.id, name: (p.data && p.data.display_name) || "我" };
+      let p = { data: null }; try { p = await sb.from("profiles").select("*").eq("id", session.user.id).maybeSingle(); } catch (e) {}
+      const cachedMe = cacheGet("me:" + session.user.id);
+      me = { id: session.user.id, name: (p.data && p.data.display_name) || (cachedMe && cachedMe.name) || "我" }; cacheSet("me:" + me.id, me);
       await refreshTrips();
       let tid = null; try { tid = localStorage.getItem("td-trip"); } catch (e) {}
       const t = trips.find(x => x.id === tid) || trips[0]; if (t) await useTrip(t);
@@ -129,6 +136,10 @@ function cloud() {
     async stamps() { return need(await sb.from("stamps").select("*").order("created_at")); },
     async deleteStamp(id) { need(await sb.from("stamps").delete().eq("id", id).eq("user_id", me.id)); emit("stamps"); },
     async addStamp(s) { const r = need(await sb.from("stamps").insert({ ...s, trip_id: trip && trip.id }).select().single()); emit("stamps"); return r; },
+    /* passport selfie: kept in your own folder so it follows you to a new phone */
+    async saveSelfie(blob) { const path = `${me.id}/selfie-${Date.now()}.jpg`; need(await sb.storage.from("checkins").upload(path, blob, { contentType: "image/jpeg" })); return path; },
+    async loadSelfie() { const r = await sb.storage.from("checkins").list(me.id, { search: "selfie-", limit: 20, sortBy: { column: "name", order: "desc" } }); const f = r.data && r.data.filter(x => /^selfie-/.test(x.name)).sort((a, b) => b.name.localeCompare(a.name))[0]; if (!f) return null;
+      const u = await sb.storage.from("checkins").createSignedUrl(`${me.id}/${f.name}`, 600); return u.data && u.data.signedUrl; },
     async uploadPhoto(blob) { const path = `${me.id}/${Date.now()}.jpg`; need(await sb.storage.from("checkins").upload(path, blob, { contentType: "image/jpeg" })); return path; },
     async photoUrl(path) { if (!path) return null; if (path.startsWith("data:")) return path; if (path.startsWith("trip:")) return this.sharedUrl(path.slice(5)); const r = await sb.storage.from("checkins").createSignedUrl(path, 3600); return r.data && r.data.signedUrl; },
     async uploadCheckinPhoto(blob) { return "trip:" + await this.uploadShared(blob); },
@@ -172,10 +183,11 @@ function cloud() {
     async settleDay(date) { try { const n = need(await sb.rpc("settle_day", { t: trip.id, d: date })); if (n) emit("skill_effects"); } catch (e) {} },
     async effects() { return need(await sb.from("skill_effects").select("*").eq("trip_id", trip.id).order("created_at")); },
     async resolveEffect(id, detail) { need(await sb.from("skill_effects").update({ resolved: true, detail }).eq("id", id)); emit("skill_effects"); },
-    async log() { return need(await sb.from("skill_log").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false }).limit(80)); },
+    async log() { return need(await sb.from("skill_log").select("*").eq("trip_id", trip.id).order("created_at", { ascending: false }).limit(400)); },
     async addLog(date, card, action, effect, meta) { need(await sb.from("skill_log").insert({ trip_id: trip.id, date, card, action, effect, meta: meta || {} })); emit("skill_log"); },
     accessToken: async () => (await sb.auth.getSession()).data.session?.access_token
   };
+  return offlineWrap(api, { trip: () => trip, me: () => me, emit });
 }
 
 /* ======================= local (demo) ======================= */

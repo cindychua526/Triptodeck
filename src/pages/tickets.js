@@ -2,7 +2,7 @@ import { ICON } from "../data/world.js";
 import { ic } from "../lib/icons.js";
 import { foodArt } from "../data/foodart.js";
 import { doodle } from "../data/doodles.js";
-import { openSheet as openUSheet, closeSheet as closeUSheet, bind as bindU, toast as toastU } from "../lib/ui.js";
+import { openSheet as openUSheet, closeSheet as closeUSheet, bind as bindU, toast as toastU, askConfirm, askText } from "../lib/ui.js";
 const RATE={love:["好吃！",ic("thumbs-up")],ok:["还行",ic("smiley-meh")],meh:["不爱",ic("thumbs-down")]};
 import { GUIDES, guideFor } from "../data/guides.js";
 /* food tickets: this module keeps its own city / food tables */
@@ -207,7 +207,7 @@ function openSheet(fromWallet, inSheet){
       ?`<button class="btn" id="shRemove">移出票夹</button><button class="btn" id="shLog">记这一笔</button><button class="btn solid" id="shClose">收好了</button>`
       :`<button class="btn" id="shAgain">放回去</button><button class="btn solid" id="shSave">${again?"更新打卡日期":"收进票夹"}</button>`}</div>`;
   requestAnimationFrame(()=>sh.classList.add("on"));
-  const del=$("shDel"); if(del) del.onclick=async()=>{ const w=inWallet(s.id); if(!confirm(`删除「${s.name}」？同一个旅行房间的人也会看不到这道菜${w?"，你票夹里这张票也会一起移除":""}。`)) return;
+  const del=$("shDel"); if(del) del.onclick=async()=>{ const w=inWallet(s.id); if(!await askConfirm(`删除「${s.name}」？同一个旅行房间的人也会看不到这道菜${w?"，你票夹里这张票也会一起移除":""}。`)) return;
     try{ await Promise.all(s.cids.map(id=>api.deleteCustom(id))); if(w){ wallet=wallet.filter(x=>x.id!==s.id); api.removeWallet(s.id).catch(()=>{}); updateBadge(); renderWallet(); } closeReveal(true); toast(`「${s.name}」删掉了`); }catch(e){ toast("没能删除："+e.message); } };
   foodPhotosInto($("shPhotos"), s.name, c.name);
   $("shPhotoIn").onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return; try{ const small=await shrinkImage(f, api.mode==="local"?600:1280, .8); const path=api.mode==="local"?small:await api.uploadShared(dataUrlToBlob(small)); loadFoodPhotoUrls.later=true; await api.addFoodPhoto({ food:s.name, city:c.name, date:todayFn(), photo_path:path }); toast("照片放进大家的手帐了"); foodPhotosInto($("shPhotos"), s.name, c.name); }catch(err){ toast("没能上传："+err.message); } };

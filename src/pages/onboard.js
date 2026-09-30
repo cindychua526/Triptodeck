@@ -1,7 +1,7 @@
 import { api } from "../lib/api.js";
 import { today, addDays, $, esc } from "../lib/util.js";
 import { sfx } from "../lib/sound.js";
-import { toast } from "../lib/ui.js";
+import { toast, askConfirm, askText } from "../lib/ui.js";
 import { FUJIAN_TEMPLATE } from "../lib/api.js";
 import { newTripForm } from "./trips.js";
 /* first launch: name → create the Fujian trip or join with a code */
@@ -25,7 +25,7 @@ export function onboard() {
         $("obNext").onclick = go; $("obName").onkeydown = e => { if (e.key === "Enter") go(); };
       } else {
         $("obXlsx").querySelector("input").onchange = async e => { const f = e.target.files && e.target.files[0]; if (!f) return; sfx.click(); try { const { parseTripXlsx, importInto } = await import("../lib/xlsx-import.js"); const data = await parseTripXlsx(f); if (!data.trip.start) throw new Error("表里没有日期"); await api.createTrip({ name: data.trip.name, start: data.trip.start, end: data.trip.end, budget: data.trip.budget, cities: data.trip.cities.length ? data.trip.cities : ["xm"], template: null, kind: "group" }); await importInto(api, data); done(); } catch (err) { toast("没能导入：" + err.message); } };
-        $("obReclaim").onclick = async () => { const c = prompt("输入你的 8 位身份码（在旧手机的设置里）"); if (!c) return; try { await api.reclaim(c.trim()); done(); setTimeout(() => location.reload(), 600); } catch (e) { toast(e.message === "BAD_CODE" ? "这个码不对" : "没能找回：" + e.message); } };
+        $("obReclaim").onclick = async () => { const c = await askText("输入你的 8 位身份码（在旧手机的设置里）"); if (!c) return; try { await api.reclaim(c.trim()); done(); setTimeout(() => location.reload(), 600); } catch (e) { toast(e.message === "BAD_CODE" ? "这个码不对" : "没能找回：" + e.message); } };
         $("obNew").onclick = () => { sfx.click(); el.classList.remove("on"); newTripForm({ after: done }); const watch = setInterval(() => { if (!document.querySelector(".usheet.on") && !api.trip) { clearInterval(watch); el.classList.add("on"); } else if (api.trip) clearInterval(watch); }, 500); };
         const j = $("obJoin"); if (j) j.onclick = async () => { const c = $("obCode").value.trim(); if (!c) return; try { await api.joinTrip(c); done(); } catch (e) { draw(String(e.message).includes("TRIP_NOT_FOUND") ? "找不到这个邀请码" : "没能加入：" + e.message); } };
       }

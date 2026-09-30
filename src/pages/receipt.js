@@ -36,6 +36,7 @@ async function lines() {
   item("美食 TASTES", wallet.length, wallet.map(w => { const nm = (w.spot_id || "").split(":").pop(); return `${nm} ${RATE[w.rating] || ""}`; }));
   if (exps.length) item("特色体验", exps.length, exps.map(s => s.name));
   item("技能发动 SKILLS", skills);
+  try { const { tripAwards } = await import("../lib/awards.js"); const aw = await tripAwards(); if (aw.length) { L.push({ k: "sec", t: api.members.length > 1 ? "旅伴奖项 MVP" : "你的称号" }); aw.slice(0, 8).forEach(a => L.push({ k: "lr", l: `${a.icon} ${a.title}`, r: api.members.length > 1 ? `${a.name} · ${a.why}` : a.why })); } } catch (e) {}
   L.push({ k: "sec", t: "花费" });
   b.cats.slice().sort((a, c) => c.v - a.v).slice(0, 6).forEach(c => L.push({ k: "lr", l: c.n, r: rm(c.v) }));
   L.push({ k: "bold" }, { k: "total", l: "TOTAL · 你的花费", r: rm(b.mine) }, { k: "lr", l: "预算", r: rm(b.budget) }, { k: "lr", l: b.mine <= b.budget ? "省下" : "超出", r: rm(Math.abs(b.budget - b.mine)) });

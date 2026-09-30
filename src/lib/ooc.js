@@ -14,7 +14,20 @@ export async function checkOOC() {
   try { await api.settleDay(yesterday()); } catch (e) {}
   let E = []; try { E = (await api.effects()).filter(e => e.target_date === today() && !e.resolved && e.card !== "X" && CARD[e.card]); } catch (e) { return; }
   queue = E.filter(e => { try { return !localStorage.getItem(seenKey(e.id)); } catch (er) { return false; } });
-  next();
+  if (queue.length >= 2) multiIntro(queue.slice(), next); else next();
+}
+/* 双重失控: two or more guardians lost control on the same day — the cards crash into each other before each one speaks */
+async function multiIntro(E, then) {
+  busy = true; const D = await import("../pages/deck.js"), n = E.length, NUM = ["", "", "双重", "三重", "四重", "五重"];
+  const ov = document.createElement("div"); ov.className = "ooc2"; ov.setAttribute("role", "dialog"); ov.setAttribute("aria-label", "多重失控");
+  ov.innerHTML = `<div class="ooc-noise"></div><div class="ooc2-flash"></div><div class="ooc2-cards">${E.map((e, i) => `<div class="ooc2-c" style="--i:${i};--n:${n};--acc:${CARD[e.card].accent}">${D.cardHTML(e.card, { cls: "mini" })}</div>`).join("")}</div>
+    <div class="ooc2-t"><small>OUT OF CONTROL × ${n}</small><b>${NUM[n] || n + " 重"}失控</b><p>${E.map(e => esc(CARD[e.card].myth)).join(" · ")}<br>今天同时失控了</p></div><button class="ooc-skip" data-skip>继续 ›</button>`;
+  document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add("on"));
+  let gone = false; const go = () => { if (gone) return; gone = true; ov.classList.add("out"); setTimeout(() => { ov.remove(); busy = false; then(); }, 420); };
+  ov.querySelector("[data-skip]").onclick = go;
+  await wait(REDUCE ? 0 : 700); ov.classList.add("hit"); sfx.chaos(); buzz([40, 30, 80, 30, 120]);
+  await wait(REDUCE ? 0 : 500); ov.classList.add("t"); try { sfx.stamp(); } catch (er) {}
+  setTimeout(go, REDUCE ? 1200 : 3000);
 }
 function next() { const e = queue.shift(); if (e) ceremony(e, next); }
 

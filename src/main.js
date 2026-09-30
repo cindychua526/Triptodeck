@@ -13,6 +13,8 @@ import { ic } from "./lib/icons.js";
 document.querySelectorAll("[data-ic]").forEach(el => { el.outerHTML = ic(el.dataset.ic); });
 import "./lib/motion.js";
 import "./lib/grey.js";
+import "./lib/netstate.js";
+import "./lib/remind.js";
 import { api, on } from "./lib/api.js";
 import { $ } from "./lib/util.js";
 import { initUI, closeSheet, sheetOpen } from "./lib/ui.js";
@@ -35,22 +37,24 @@ import { openReceipt } from "./pages/receipt.js";
 import { openBookPart } from "./pages/collection.js";
 
 initUI();
+/* shared ink filter: soft bleed + slight mottling, used by passport stamps */
+document.body.insertAdjacentHTML("beforeend", `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><filter id="inkbleed" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" result="d"/><feGaussianBlur in="d" stdDeviation=".35" result="b"/><feComponentTransfer in="n" result="m"><feFuncA type="discrete" tableValues="1 1 .82 1 .7 1"/></feComponentTransfer><feComposite in="b" in2="m" operator="in"/></filter></svg>`);
 const TAB_OF = { fortune: "fortune", trip: "trip", play: "play", deck: "play", coin: "play", tear: "play", collect: "collect", budget: "budget" };
 let fortuneMod = null;
 function syncSound() { const on = soundOn(), t = on ? "sound-on" : "sound-off"; document.querySelectorAll(".snd").forEach(b => { if (b.dataset.st !== t) { b.dataset.st = t; b.innerHTML = ic(on ? "speaker-high" : "speaker-slash"); } const p = String(on); if (b.getAttribute("aria-pressed") !== p) { b.setAttribute("aria-pressed", p); b.setAttribute("aria-label", on ? "音效：开" : "音效：关"); } }); }
 let sndT = 0; new MutationObserver(() => { clearTimeout(sndT); sndT = setTimeout(syncSound, 60); }).observe(document.body, { childList: true, subtree: true });
 onSoundChange(syncSound);
-window.tdGo = p => go(p);
-export function go(p, push = true) {
-  if (p === "fortune" && !document.querySelector("#stage .card.revealed, #stage.front")) setTimeout(() => renderToday(), 80);
-  if (!document.getElementById("pg-" + p)) p = "fortune";
-  document.querySelectorAll(".page").forEach(s => s.classList.toggle("on", s.id === "pg-" + p));
-  /* delegated so buttons re-rendered by a page keep working */
+/* delegated so buttons re-rendered by a page keep working */
 document.addEventListener("click", e => {
   const b = e.target.closest && e.target.closest("[data-back]"); if (b) { sfx.tap(); go("play"); return; }
   const s = e.target.closest && e.target.closest(".snd"); if (s) { setSound(!soundOn()); }
 });
 document.getElementById("bookBtn").addEventListener("click", () => openShelf());
+window.tdGo = p => go(p);
+export function go(p, push = true) {
+  if (p === "fortune" && !document.querySelector("#stage .card.revealed, #stage.front")) setTimeout(() => renderToday(), 80);
+  if (!document.getElementById("pg-" + p)) p = "fortune";
+  document.querySelectorAll(".page").forEach(s => s.classList.toggle("on", s.id === "pg-" + p));
 document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.p === TAB_OF[p]));
   if (push && location.hash !== "#/" + p) history.pushState({ p }, "", "#/" + p);
   if (p === "trip") renderTrip();
@@ -82,6 +86,15 @@ async function start() {
   if (s && api.trips.length) openShelf();
   startI18n(); renderToday();
   setCardArt(k => { try { return cardHTML(k, { cls: "mini" }); } catch (e) { return ""; } }); startNotify(); setTimeout(() => import("./lib/ooc.js").then(m => m.checkOOC()), 2200);
-  onNotifyAction("skill", () => go("deck")); onNotifyAction("reviewed", () => { go("collect"); setTimeout(() => openBookPart("passport"), 300); }); onNotifyAction("receipt", () => openReceipt());
+  onNotifyAction("skill", () => go("deck")); onNotifyAction("reviewed", () => { go("collect"); setTimeout(() => openBookPart("passport"), 300); }); onNotifyAction("receipt", () => openReceipt()); onNotifyAction("remind", () => { go("trip"); setTimeout(() => document.querySelector("#pg-trip [data-seg=check]")?.click(), 300); });
+  onNotifyAction("photo", () => import("./pages/shared.js").then(m => m.openShared()));
+  onNotifyAction("paper", n => import("./pages/paper.js").then(m => m.openPaper(n.d)));
+  setInterval(eveningPaper, 60000); setTimeout(eveningPaper, 8000); onNotifyAction("light", n => import("./lib/relight.js").then(m => m.openLighter(n.info))); onNotifyAction("lit", () => { go("collect"); setTimeout(() => openBookPart("passport"), 300); });
+}
+/* evening edition: after 8pm on a trip day, once, a banner says today's paper is out */
+async function eveningPaper() {
+  if (!api.trip || new Date().getHours() < 20) return; const d = today(); if (d < api.trip.start_date || d > api.trip.end_date) return;
+  const k = `td-paper-note:${api.trip.id}:${d}`; try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch (e) { return; }
+  const { banner } = await import("./lib/notify.js"); banner({ kind: "paper", d, icon: "报", kicker: "晚报出版", title: "今天的《旅途小报》印好了", body: "把今天的打卡、美食和骰子排成了一张报纸", action: "看看" });
 }
 start();

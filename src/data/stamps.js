@@ -187,3 +187,22 @@ export function postageStamp(name, city, date, kind) {
   const pm = postmark({ ...o, col: "#2b2118", u: u + "m" }).replace('<g filter', `<g opacity=".62" transform="translate(96 -34) scale(.62) rotate(-14 110 110)"><g filter`) + "</g>";
   return `<svg viewBox="0 0 220 220" class="stamp-svg post-svg" aria-label="${esc(nm)}邮票">${defs(u, h)}${defs(u + "m", h)}${postage(o)}${pm}</svg>`;
 }
+
+/* G. 城市勋章 · city medal: collect 5 place stamps in one city and this gold rosette unlocks on that city's passport page */
+export const MEDAL_AT = 5;
+export function cityMedal(cityName, n, date) {
+  const c = cityName || "旅行", h = hash("medal" + c), u = "m" + Math.random().toString(36).slice(2, 8), ink = "#8a5a12", gold = "#d9a63a", deep = ENTRY_INK[(h >>> 3) % ENTRY_INK.length];
+  const pts = Array.from({ length: 32 }, (_, i) => { const t = i / 32 * Math.PI * 2, r = i % 2 ? 84 : 94; return `${(110 + Math.cos(t) * r).toFixed(1)} ${(100 + Math.sin(t) * r).toFixed(1)}`; }).join("L");
+  const scene = sceneFor(c, c, h), en = shortEn(c);
+  return `<svg viewBox="0 0 220 240" class="stamp-svg medal-svg" aria-label="${esc(c)}城市勋章">${defs(u, h)}
+    <defs><radialGradient id="${u}g" cx="45%" cy="38%" r="70%"><stop offset="0" stop-color="#fbe7a8"/><stop offset=".55" stop-color="${gold}"/><stop offset="1" stop-color="#a8761f"/></radialGradient><clipPath id="${u}k"><circle cx="110" cy="100" r="58"/></clipPath><path id="${u}a" d="M42 100a68 68 0 0 1 136 0"/></defs>
+    <path d="M78 170l-18 62 22-12 14 18 14-62z" fill="${deep}"/><path d="M142 170l18 62-22-12-14 18-14-62z" fill="${deep}" opacity=".85"/>
+    <path d="M${pts}Z" fill="url(#${u}g)" stroke="${ink}" stroke-width="1.5"/>
+    <circle cx="110" cy="100" r="76" fill="none" stroke="${ink}" stroke-width="1" stroke-dasharray="2 3"/>
+    <circle cx="110" cy="100" r="62" fill="#fbf3dc" stroke="${ink}" stroke-width="2.2"/>
+    <g clip-path="url(#${u}k)" stroke-linecap="round" stroke-linejoin="round" transform="translate(22 12) scale(.8)">${drawScene(scene, deep, gold)}</g>
+    <text font-family="Noto Serif SC, serif" font-weight="800" font-size="12" letter-spacing="4" fill="${ink}"><textPath href="#${u}a" startOffset="50%" text-anchor="middle">城市勋章 · ${esc(en)}</textPath></text>
+    <rect x="52" y="128" width="116" height="26" rx="3" fill="${deep}"/><text x="110" y="147" text-anchor="middle" font-family="Noto Serif SC, serif" font-weight="800" font-size="${fsFor(c, 17)}" letter-spacing="3" fill="#fbf3dc">${esc(c)}</text>
+    <text x="110" y="173" text-anchor="middle" font-family="Cormorant Garamond, Georgia, serif" font-weight="700" font-size="11" letter-spacing="2" fill="#3e2606">${n} STAMPS · ${fdate(date)}</text>
+    <path transform="translate(110 186) scale(.7)" d="M0 -10l3 7 8 .6-6 5 2 8-7-4-7 4 2-8-6-5 8-.6z" fill="${ink}"/></svg>`;
+}

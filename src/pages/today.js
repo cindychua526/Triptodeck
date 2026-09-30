@@ -1,7 +1,7 @@
 /* The strip under the Today header: today's weather, today's note, and the little games. */
 import { api, on, nameOf } from "../lib/api.js";
 import { $, esc, today, shortDate, weekday } from "../lib/util.js";
-import { openSheet, setSheet, closeSheet, bind, toast } from "../lib/ui.js";
+import { openSheet, setSheet, closeSheet, bind, toast, askConfirm, askText } from "../lib/ui.js";
 import { t as T } from "../lib/i18n.js";
 import { weatherFor } from "../lib/weather.js";
 import { playMotion, weatherMotion } from "../lib/motion.js";
@@ -130,11 +130,11 @@ async function extrasHTML(d, days, gg) {
     if ((h >= 15 && h < 16 && !mine) || M.length) out += `<div class="rit"><div class="rit-h"><small>15:00</small><b>${T("现在，大家都在哪？", "Where is everyone, right now?")}</b></div>${M.map(x => `<div class="rit-row done"><i>${ic("map-pin")}</i><span><b>${esc(nameOf(x.user_id))}</b> ${esc(x.note || "")}</span></div>`).join("")}${h >= 15 && h < 16 && !mine ? `<button class="rit-row" data-rit="moment"><i></i><span>${T("我在……", "I'm at…")}</span>${ic("map-pin")}</button>` : ""}</div>`; } catch (e) {}
   return out;
 }
-async function askMoment(d) { const n = prompt(T("现在在哪？一句就好", "Where are you? One line"), ""); if (!n) return; let lat = null, lng = null; try { const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 })); lat = pos.coords.latitude; lng = pos.coords.longitude; } catch (e) {} try { await api.addMoment(d, n.trim(), lat, lng); mus.chime(3, .03); renderToday(); } catch (e) { toast("没能记下"); } }
+async function askMoment(d) { const n = await askText(T("现在在哪？一句就好", "Where are you? One line"), ""); if (!n) return; let lat = null, lng = null; try { const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 4000 })); lat = pos.coords.latitude; lng = pos.coords.longitude; } catch (e) {} try { await api.addMoment(d, n.trim(), lat, lng); mus.chime(3, .03); renderToday(); } catch (e) { toast("没能记下"); } }
 async function openLetter(d) {
   const others = api.members.filter(m => m.id !== api.me.id); if (!others.length) return toast(T("这趟只有你一个人，信写给未来的自己吧", "Only you on this trip")); 
   const to = others[Math.floor(Math.random() * others.length)];
-  const body = prompt(T(`写给 ${to.name} 的一封信（回家第 7 天才能拆）`, `A letter to ${to.name} (opens 7 days after)`), ""); if (!body) return;
+  const body = await askText(T(`写给 ${to.name} 的一封信（回家第 7 天才能拆）`, `A letter to ${to.name} (opens 7 days after)`), ""); if (!body) return;
   const days = tripDays(), end = days[days.length - 1], o = new Date(end + "T12:00:00"); o.setDate(o.getDate() + 7);
   try { await api.sendLetter(to.id, body.trim(), o.toISOString().slice(0, 10)); localStorage.setItem("td-letter:" + api.trip.id, "1"); mus.harp(2, 6, .07); toast(T("信封好了，第七天才会打开", "Sealed. It opens on day seven.")); renderToday(); } catch (e) { toast("没能寄出"); }
 }

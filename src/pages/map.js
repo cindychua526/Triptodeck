@@ -1,7 +1,8 @@
 /* Trip map: our itinerary as routes on a live map (高德 tiles work well in China; OSM as fallback). */
 import { ic } from "../lib/icons.js";
-import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+/* leaflet is only loaded the first time a map is shown, so the app opens faster */
+let L = null, loadingL = null;
+const loadLeaflet = () => loadingL || (loadingL = Promise.all([import("leaflet"), import("leaflet/dist/leaflet.css")]).then(([m]) => { L = m.default || m; return L; }));
 import { api } from "../lib/api.js";
 import { esc, toMin, shortDate, weekday, today, wait } from "../lib/util.js";
 import { toast } from "../lib/ui.js";
@@ -26,6 +27,7 @@ const back = (lat, lng) => provider === "amap" ? toWgs(lat, lng) : [lat, lng];
 export const coordOf = a => (a.lat && a.lng) ? [a.lat, a.lng] : (COORDS[a.title] || guideLL(a.title) || null);
 
 function setTiles() {
+  if (!map) return;
   if (tiles) map.removeLayer(tiles);
   tiles = provider === "amap"
     ? L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", { subdomains: "1234", maxZoom: 18, attribution: "© 高德地图" })
@@ -48,7 +50,11 @@ function ensureMap() {
   });
 }
 let lastKey = "";
-export function mountMap(holder, { acts, days, day, onCheckin }) {
+export function mountMap(holder, opts) {
+  if (!L) { loadLeaflet().then(() => { if (holder && holder.isConnected) mountMap(holder, opts); }); return; }
+  return mountMap0(holder, opts);
+}
+function mountMap0(holder, { acts, days, day, onCheckin }) {
   ensureMap();
   holder.appendChild(el);
   setTimeout(() => map.invalidateSize(), 30);
@@ -89,7 +95,9 @@ async function geocode(list) {
     let q = a.title.replace(/^CHECK IN /, "").replace(/（.*?）|\(.*?\)/g, "").replace(/ · .*/, "").trim();
     const stay = STAYS.find(s => a.title.includes("CHECK IN") && s.in === a.date); if (stay) q = stay.name.replace(/（|）/g, " ");
     try {
-      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh&viewbox=116.3,27.6,120.7,23.4&bounded=1&q=${encodeURIComponent(q + " " + (a.city || ""))}`);
+      /* search around this trip's own cities (it used to be locked to a box around Fujian, so KL, Bangkok, Tokyo… never found anything) */
+      const g = GUIDES.find(x => x.name === a.city) || GUIDES.find(x => (api.trip && api.trip.cities || []).includes(x.id)), box = g && g.ll ? `&viewbox=${g.ll[1] - 1.2},${g.ll[0] + 1.2},${g.ll[1] + 1.2},${g.ll[0] - 1.2}&bounded=1` : "";
+      const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh${box}&q=${encodeURIComponent(q + " " + (a.city || ""))}`);
       const j = await r.json();
       if (j && j[0]) await api.updateActivity(a.id, { lat: +j[0].lat, lng: +j[0].lon });
     } catch (e) {}

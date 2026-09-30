@@ -2,9 +2,9 @@
    food-ticket wallet, diary and the final receipt. Everything here is private to you. */
 import { api, on } from "../lib/api.js";
 import { $, esc, shortDate, weekday, hash, addDays, today } from "../lib/util.js";
-import { toast, openSheet, closeSheet, bind } from "../lib/ui.js";
+import { toast, openSheet, closeSheet, bind, askConfirm, askText } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
-import { placeStamp, citySeal, waxSeal } from "../data/stamps.js";
+import { placeStamp, citySeal, waxSeal , cityMedal, MEDAL_AT } from "../data/stamps.js";
 import { posterStamp } from "../data/posterstamp.js";
 import { doodle } from "../data/doodles.js";
 import { foodArt } from "../data/foodart.js";
@@ -15,7 +15,7 @@ import { makePoster } from "./poster.js";
 import { lookChips, bindLookChips } from "../lib/look.js";
 import { departuresOf, sealCeremony } from "./arrive.js";
 import { tripDays, cityOf, dayActs as dayActsOf, tripCityNames } from "./trip.js";
-import { shrinkImage } from "../lib/util.js";
+import { shrinkImage, dataUrlToBlob } from "../lib/util.js";
 import { openFlipbook } from "./flipbook.js";
 import { t as T } from "../lib/i18n.js";
 import { openReceipt } from "./receipt.js";
@@ -25,11 +25,17 @@ import { isGrey, greySvg, GREY_NOTE } from "../lib/grey.js";
 let stamps = [], trips = [], importedTickets = null;
 import("./tickets.js").then(m => { importedTickets = m; });
 export const myStamps = () => stamps;
-export async function loadStamps() { try { stamps = await api.stamps(); trips = await api.listTrips(); } catch (e) { stamps = []; } renderBook(); }
-on("stamps", async () => { stamps = await api.stamps(); renderBook(); });
+export async function loadStamps() { syncSelfie(); try { stamps = await api.stamps(); trips = await api.listTrips(); } catch (e) { stamps = []; } renderBook(); medalCheck(); }
+on("stamps", async () => { stamps = await api.stamps(); renderBook(); medalCheck(); });
+/* first time a city reaches MEDAL_AT place stamps: a banner, once */
+function medalCheck() {
+  if (!api.trip) return; const by = {}; stamps.filter(s => (s.kind === "place" || s.kind === "special") && s.trip_id === api.trip.id).forEach(s => by[s.city] = (by[s.city] || 0) + 1);
+  Object.entries(by).filter(([, n]) => n >= MEDAL_AT).forEach(([c]) => { const k = `td-medal:${api.trip.id}:${c}`; try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch (e) { return; }
+    import("../lib/notify.js").then(m => m.banner({ kind: "reviewed", id: k, art: cityMedal(c, by[c], today()), kicker: T("解锁城市勋章", "Medal unlocked"), title: T(`${c}城市勋章到手！`, `${c} city medal unlocked!`), body: T(`在${c}盖了 ${by[c]} 枚章，去护照看看`, `${by[c]} stamps in ${c} — see your passport`), action: T("去看看", "Open") })); });
+}
 on("trip", async () => { try { trips = await api.listTrips(); } catch (e) {} renderBook(); });
 on("wallet", () => renderBook());
-document.addEventListener("td-grey", () => renderBook());
+document.addEventListener("td-grey", () => { renderBook(); document.dispatchEvent(new Event("td-sv-refresh")); });
 
 export function placeStampSVG(name, cityName, date, special) { return placeStamp(name, cityName, date, { special }); }
 const stampRaw = s => s.kind === "city" ? citySeal(s.city || s.name, s.date) : s.kind === "experience" ? waxSeal(s.name, s.city, s.date) : placeStamp(s.name, s.city, s.date, { special: s.kind === "special" });
@@ -92,7 +98,13 @@ function poster() {
 /* passport photo: your own selfie, kept on this phone — it never changes by itself */
 const selfieKey = () => "td-selfie:" + ((api.me && api.me.id) || "me");
 export function getSelfie() { try { return localStorage.getItem(selfieKey()) || null; } catch (e) { return null; } }
-export function setSelfie(url) { try { localStorage.setItem(selfieKey(), url); } catch (e) { toast("手机空间不够，照片没存下来"); } }
+export function setSelfie(url) { try { localStorage.setItem(selfieKey(), url); } catch (e) { toast("手机空间不够，照片没存下来"); }
+  if (api.saveSelfie) api.saveSelfie(dataUrlToBlob(url)).catch(() => {}); }
+/* new phone or cleared storage: bring the passport selfie back from the cloud */
+export async function syncSelfie() {
+  if (getSelfie() || !api.loadSelfie || !api.me) return;
+  try { const u = await api.loadSelfie(); if (!u) return; const b = await (await fetch(u)).blob(); const d = await new Promise(r => { const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); }); localStorage.setItem(selfieKey(), d); renderBook(); } catch (e) {}
+}
 /* ---------- readers ---------- */
 const OPEN = {
   async passport() {
@@ -117,13 +129,17 @@ const OPEN = {
         const chunk = rest.slice(i * 6, i * 6 + 6);
         pages.push(`<div class="pp-page mvisa" data-noi18n>${g}<div class="mv-h"><small>VISA · 签证 · ${String(pages.length).padStart(2, "0")}</small><b>${esc(c)}</b><span>${i ? "续页 · continued" : seal ? "入境 · Arrival " + shortDate(seal.date) : "还没盖入境章 · Not yet arrived"}</span></div>
           ${!i ? (seal ? `<div class="mv-seal">${stampFor(seal)}</div>` : `<div class="mv-seal empty"><span>${esc(c)}</span><small>抵达后盖一枚</small><button class="btn sm ink" data-nofl data-seal="${esc(c)}">✦ 盖入境章</button></div>`) : ""}
-          <div class="mv-grid">${chunk.map(s => `<div class="pp-st" style="--r:${(hash(s.id) % 25) - 12}deg">${stampFor(s)}</div>`).join("")}</div><span class="mv-no">${pages.length}</span></div>`);
+          ${!i ? (rest.length >= MEDAL_AT ? `<button class="mv-medal" data-nofl data-medal="${esc(c)}">${cityMedal(c, rest.length, rest[MEDAL_AT - 1].date)}</button>` : `<p class="mv-prog"><i style="--w:${rest.length / MEDAL_AT * 100}%"></i><span>${T(`再盖 ${MEDAL_AT - rest.length} 枚，解锁${c}城市勋章`, `${MEDAL_AT - rest.length} more to unlock the ${c} medal`)}</span></p>`) : ""}
+          <div class="mv-grid">${chunk.map(s => { const h = hash(s.id); return `<div class="pp-st" style="--r:${(h % 25) - 12}deg;--dx:${(h >> 3) % 15 - 7}px;--dy:${(h >> 5) % 13 - 6}px;--ink:${.72 + ((h >> 7) % 25) / 100}">${stampFor(s)}</div>`; }).join("")}</div><span class="mv-no">${pages.length}</span></div>`);
       }
     });
     pages.push(`<div class="pp-page mvisa" data-noi18n>${g}<div class="mv-h"><small>VISA · 签证</small><b>下一站</b><span>This page is left for the next journey.</span></div><div class="mv-seal empty"><span>？</span><small>留给下一段旅程</small></div></div>`);
     openFlipbook({ pages, theme: "passport", title: "印章护照", after: async ov => {
       const sb = ov.querySelector("[data-selfie]"), fi = ov.querySelector("#ppSelfie");
       if (sb && fi) { sb.onclick = e => { e.stopPropagation(); fi.click(); }; fi.onchange = async () => { const f = fi.files && fi.files[0]; if (!f) return; try { const url = await shrinkImage(f, 420, .82); setSelfie(url); sb.style.backgroundImage = `url('${url}')`; sb.innerHTML = `<i class="pp-re">重拍</i>`; sfx.stamp(); toast("护照照片换好了，以后都用这张"); } catch (er) { toast("这张照片读不出来，换一张试试"); } }; }
+      ov.querySelectorAll("[data-medal]").forEach(b => b.onclick = e => { e.stopPropagation(); const c = b.dataset.medal, list = stamps.filter(s => s.city === c && (s.kind === "place" || s.kind === "special"));
+        const m = document.createElement("div"); m.className = "medal-ov"; m.innerHTML = `<div class="medal-big">${cityMedal(c, list.length, (list[MEDAL_AT - 1] || list[list.length - 1] || {}).date || today())}</div><b>${esc(c)}</b><p>${T(`你在${c}盖了 ${list.length} 枚章`, `${list.length} stamps collected in ${c}`)}</p><small>${list.map(s => esc(short(s.name))).join(" · ")}</small>`;
+        m.onclick = () => { m.classList.remove("on"); setTimeout(() => m.remove(), 300); }; document.body.appendChild(m); requestAnimationFrame(() => m.classList.add("on")); [0, 4, 7, 12].forEach((n, i) => mus.chime(n, .03, i * .08)); });
       ov.querySelectorAll("[data-seal]").forEach(b => b.onclick = e => { e.stopPropagation(); const c = b.dataset.seal, d = tripDays().find(x => cityOf(x) === c) || today(); ov.querySelector(".fb-x").click(); setTimeout(() => sealCeremony(c, d <= today() ? d : today()), 380); });
       for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
   },
@@ -146,7 +162,7 @@ const OPEN = {
     }), ...Object.keys(byDay).sort().map(d => `<div class="al-page day"><div class="cal-h"><b>${shortDate(d)}</b><em>${weekday(d)} · ${esc(cityOf(d))}</em></div><div class="day-ph">${byDay[d].map((s, i) => `<figure class="pola" style="--r:${((i * 37) % 9) - 4}deg"><div class="dp" ${src(s)}></div><figcaption ${s.id ? `data-cap="${s.k}:${s.id}"` : ""}>${esc(s.caption || short(s.name || "")) || `<span class="cap-hint">点这里写一句</span>`}</figcaption></figure>`).join("")}</div><p class="al-tip">点照片下面，写一句话。会一起印在海报上。</p></div>`)];
     openFlipbook({ pages, theme: "album", title: "相册", after: async ov => {
       bindLookChips(ov);
-      ov.querySelectorAll("[data-cap]").forEach(fc => fc.onclick = async e => { e.stopPropagation(); const [k, id] = fc.dataset.cap.split(":"), cur0 = fc.querySelector(".cap-hint") ? "" : fc.textContent; const v = prompt("在这张照片下面写一句", cur0); if (v === null) return; try { await api.setCaption(k, id, v.trim()); fc.innerHTML = esc(v.trim()) || `<span class="cap-hint">点这里写一句</span>`; mus.chime(4, .02); } catch (err) { toast("没能保存：" + err.message); } });
+      ov.querySelectorAll("[data-cap]").forEach(fc => fc.onclick = async e => { e.stopPropagation(); const [k, id] = fc.dataset.cap.split(":"), cur0 = fc.querySelector(".cap-hint") ? "" : fc.textContent; const v = await askText("在这张照片下面写一句", cur0); if (v === null) return; try { await api.setCaption(k, id, v.trim()); fc.innerHTML = esc(v.trim()) || `<span class="cap-hint">点这里写一句</span>`; mus.chime(4, .02); } catch (err) { toast("没能保存：" + err.message); } });
       for (const el of ov.querySelectorAll("[data-cpath]")) { const u = await api.photoUrl(el.dataset.cpath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; }
       for (const el of ov.querySelectorAll("[data-spath]")) { const u = await api.sharedUrl(el.dataset.spath); if (u && el.isConnected) el.style.backgroundImage = `url("${u}")`; } } });
   },
@@ -253,7 +269,7 @@ export function openStampViewer(list, i = 0) {
   const ov = document.createElement("div"); ov.className = "sv"; ov.setAttribute("role", "dialog");
   ov.innerHTML = `<div class="sv-top"><small id="svWhen"></small><button class="sc-x" aria-label="${T("关闭", "Close")}">×</button></div>
     <div class="sv-stage"><div class="sv-card" id="svCard"><div class="sv-face sv-front" id="svFront"></div><div class="sv-face sv-back" id="svBack"></div><div class="sv-holo" id="svHolo"></div></div></div>
-    <p class="sv-name" id="svName"></p><div class="sv-dots" id="svDots"></div>
+    <p class="sv-name" id="svName"></p><button class="sv-light" id="svLight" hidden>✦ <span></span></button><div class="sv-dots" id="svDots"></div>
     <div class="sv-bar"><button data-a="del" aria-label="${T("删除", "Delete")}">×</button><button data-a="share" aria-label="${T("分享给大家", "Share")}">⇪</button><button data-a="fav" aria-label="${T("收藏", "Favourite")}">☆</button><button data-a="flip" aria-label="${T("翻面", "Flip")}">↻</button><button data-a="next" aria-label="${T("下一张", "Next")}">→</button></div>`;
   document.body.appendChild(ov); requestAnimationFrame(() => ov.classList.add("on")); mus.chime(2, .025); mus.chime(4, .02, .08);
   const card = ov.querySelector("#svCard"), holo = ov.querySelector("#svHolo"); let flipped = false, rx = 0, ry = 0;
@@ -266,6 +282,9 @@ export function openStampViewer(list, i = 0) {
     const ph = ov.querySelector("[data-p]"); if (ph) api.photoUrl(ph.dataset.p).then(u => { if (u && ph.isConnected) ph.style.backgroundImage = `url("${u}")`; });
     ov.querySelector("#svWhen").textContent = T(`收集于 ${st.date.replace(/-/g, ".")}`, `Collected on ${st.date}`) + (isGrey(st) ? " · " + GREY_NOTE : "");
     ov.querySelector("#svName").textContent = `${short(st.name)} · ${st.city || ""}`;
+    const lb = ov.querySelector("#svLight"), g = isGrey(st) && (!st.user_id || st.user_id === api.me.id); lb.hidden = !g;
+    if (g) { const solo = api.mode === "local" || api.members.filter(m => m.id !== api.me.id).length === 0; lb.querySelector("span").textContent = solo ? T("自己点亮这枚章", "Relight it yourself") : T("请旅伴帮忙点亮", "Ask a buddy to relight it"); lb.onclick = () => import("../lib/relight.js").then(m => m.requestLight(st)); }
+    if (!ov._rf) { ov._rf = () => ov.isConnected && show(); document.addEventListener("td-sv-refresh", ov._rf); }
     ov.querySelector("[data-a=fav]").textContent = f.has(st.id) ? "★" : "☆"; ov.querySelector("[data-a=fav]").classList.toggle("on", f.has(st.id));
     ov.querySelector("#svDots").innerHTML = list.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("");
     flipped = false; setT(); if (dir) { card.animate([{ transform: `translateX(${dir * 60}px) rotate(${dir * 6}deg)`, opacity: 0 }, { transform: tr(), opacity: 1 }], { duration: 380, easing: "cubic-bezier(.2,1.3,.4,1)" }); } };
@@ -282,7 +301,7 @@ export function openStampViewer(list, i = 0) {
   ov.querySelector(".sc-x").onclick = () => { window.removeEventListener("deviceorientation", orient); ov.classList.remove("on"); setTimeout(() => ov.remove(), 350); };
   ov.querySelector("[data-a=flip]").onclick = flip; ov.querySelector("[data-a=next]").onclick = () => go(1);
   ov.querySelector("[data-a=share]").onclick = async () => { const st = list[i]; if (!st || !st.photo_path) return toast("这枚章没有照片"); try { const u = await api.photoUrl(st.photo_path); const blob = await (await fetch(u)).blob(); const path = api.mode === "local" ? u : await api.uploadShared(blob); await api.addSharedPhoto(path, st.name, st.date); mus.chime(5, .03); toast("放进大家的相册了"); } catch (e) { toast("没能分享：" + e.message); } };
-  ov.querySelector("[data-a=del]").onclick = async () => { const st = list[i]; if (!st) return; if (!confirm(`删掉「${st.name}」这枚章？盖错了可以重新打卡。`)) return; try { await api.deleteStamp(st.id); toast("删掉了"); ov.remove(); document.querySelector(".arch .sc-x") && document.querySelector(".arch .sc-x").click(); } catch (e) { toast("没能删：" + e.message); } };
+  ov.querySelector("[data-a=del]").onclick = async () => { const st = list[i]; if (!st) return; if (!await askConfirm(`删掉「${st.name}」这枚章？盖错了可以重新打卡。`)) return; try { await api.deleteStamp(st.id); toast("删掉了"); ov.remove(); document.querySelector(".arch .sc-x") && document.querySelector(".arch .sc-x").click(); } catch (e) { toast("没能删：" + e.message); } };
   ov.querySelector("[data-a=fav]").onclick = () => { const f = favs(), id = list[i].id; f.has(id) ? f.delete(id) : (f.add(id), mus.chime(4, .03), mus.chime(6, .02, .1)); localStorage.setItem("td-fav-stamps", JSON.stringify([...f])); show(); };
   ov.tabIndex = -1; ov.focus(); ov.addEventListener("keydown", e => { if (e.key === "ArrowRight") go(1); if (e.key === "ArrowLeft") go(-1); if (e.key === " ") flip(); });
   show();

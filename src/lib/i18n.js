@@ -53,13 +53,15 @@ const Z2E = {
   "攻略内容是出发前整理的资料，开放时间和价格以现场为准。": "Guide notes were collected before the trip — check opening hours and prices on site.",
   "入境章": "Entry seal", "体验印记": "Experience seal", "计划外": "Unplanned", "收进手账": "Keep"
 };
-let NAMES = null;
+let NAMES = null, MORE = {};
 async function names() {
   if (NAMES) return NAMES;
   const [{ GUIDES }, sk] = await Promise.all([import("../data/guides.js"), import("../data/skills.js")]);
   NAMES = {}; EN2ZH = {};
   GUIDES.forEach(g => { NAMES[g.name] = g.en; EN2ZH[g.en] = g.name; g.spots.forEach(s => { if (s.e) NAMES[s.n] = s.e; }); g.foods.forEach(f => { if (f.e) NAMES[f.n] = f.e; }); });
   [...sk.SKILLS, ...sk.MINORS].forEach(c => { NAMES[c.name] = titleCase(c.en); if (c.effectEn) NAMES[c.effect] = c.effectEn; });
+  /* the rest of the interface text: only downloaded in English mode */
+  if (lang === "en") { try { MORE = (await import("./i18n_more.js")).MORE_EN; } catch (e) {} }
   return NAMES;
 }
 const titleCase = s => s.toLowerCase().replace(/\b\w/g, m => m.toUpperCase());
@@ -100,10 +102,10 @@ function toZh(s) {
 }
 function toEn(s) {
   const tr = s.trim(); if (!tr || !HAN.test(tr)) return null;
-  const hit = Z2E[tr] ?? (NAMES && NAMES[tr]); if (hit != null) return s.replace(tr, hit);
+  const hit = Z2E[tr] ?? (NAMES && NAMES[tr]) ?? MORE[tr]; if (hit != null) return s.replace(tr, hit);
   for (const [re, rep] of RULES_EN) if (re.test(tr)) return s.replace(tr, tr.replace(re, rep));
   // "厦门 · 鼓浪屿" style: translate each part if all parts are known
-  const parts = tr.split(/\s*·\s*/); if (parts.length > 1 && parts.every(p => Z2E[p] || (NAMES && NAMES[p]) || !HAN.test(p))) return s.replace(tr, parts.map(p => Z2E[p] || (NAMES && NAMES[p]) || p).join(" · "));
+  const parts = tr.split(/\s*·\s*/); if (parts.length > 1 && parts.every(p => Z2E[p] || (NAMES && NAMES[p]) || MORE[p] || !HAN.test(p))) return s.replace(tr, parts.map(p => Z2E[p] || (NAMES && NAMES[p]) || MORE[p] || p).join(" · "));
   return null;
 }
 const fix = lang === "en" ? toEn : toZh;

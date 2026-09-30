@@ -1,7 +1,7 @@
 import { api, on, nameOf } from "../lib/api.js";
 import { ic } from "../lib/icons.js";
 import { $, esc, today, addDays, shortDate, weekday, toMin, fmtMin, whenTxt, uid } from "../lib/util.js";
-import { openSheet, closeSheet, toast, bind } from "../lib/ui.js";
+import { openSheet, closeSheet, toast, bind, askConfirm, askText } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
 import { GUIDE, STAYS, EXTRA_PLACES, kindIcon } from "../data/fujian.js";
 import { ICON } from "../data/world.js";
@@ -136,12 +136,12 @@ export function render() {
   root.querySelectorAll("[data-open]").forEach(b => b.onclick = () => openActivity(b.dataset.open));
   root.querySelectorAll("[data-spot]").forEach(b => b.onclick = () => { const a = acts.find(x => x.id === b.dataset.aid); openCheckin({ name: b.dataset.spot, city: a.city, date: a.date, kind: "place", parent: a.title }); });
   root.querySelectorAll("[data-ck]").forEach(b => b.onclick = async () => { const it = checks.find(c => c.id === b.dataset.ck); it.done = !it.done; it.done_by = api.me.id; it.done_at = new Date().toISOString(); sfx[it.done ? "stamp" : "tap"](); render(); try { await api.setCheck(it.id, it.done); } catch (e) { toast("没能同步，请检查网络"); } });
-  root.querySelectorAll("[data-ckren]").forEach(b => b.onclick = async () => { const n = prompt("改成", b.dataset.l); if (!n || n.trim() === b.dataset.l) return; try { await api.renameCheck(b.dataset.ckren, n.trim()); } catch (e) { toast("没能改"); } });
-  root.querySelectorAll("[data-ckdel]").forEach(b => b.onclick = async () => { if (!confirm("删除这一项？")) return; try { await api.deleteCheck(b.dataset.ckdel); } catch (e) { toast("没能删除"); } });
+  root.querySelectorAll("[data-ckren]").forEach(b => b.onclick = async () => { const n = await askText("改成", b.dataset.l); if (!n || n.trim() === b.dataset.l) return; try { await api.renameCheck(b.dataset.ckren, n.trim()); } catch (e) { toast("没能改"); } });
+  root.querySelectorAll("[data-ckdel]").forEach(b => b.onclick = async () => { if (!await askConfirm("删除这一项？")) return; try { await api.deleteCheck(b.dataset.ckdel); } catch (e) { toast("没能删除"); } });
   const privErr = e => toast(e && e.code === "NEED_MIGRATION_4" ? "私人清单要先在 Supabase 运行 migration_4.sql" : "没能添加");
   root.querySelectorAll("[data-newck]").forEach(b => b.onclick = async () => { const p = !!b.dataset.priv, inp = root.querySelector(`[data-newin="${CSS.escape(b.dataset.newck)}"][data-priv="${p ? 1 : ""}"]`), v = inp.value.trim(); if (!v) return; try { if (p) await addPrivCheck(b.dataset.newck, v); else await api.addCheck(b.dataset.newck, v, 9999); sfx.tap(); } catch (e) { privErr(e); } });
   root.querySelectorAll("[data-ckpriv]").forEach(b => b.onclick = async () => { try { await api.setCheckPrivate(b.dataset.ckpriv, true); sfx.tap(); toast("改成私人了，只有你看得到"); } catch (e) { privErr(e); } });
-  root.querySelectorAll("[data-ckpub]").forEach(b => b.onclick = async () => { if (!confirm("改成大家共用？旅伴会看到这一项。")) return; try { await api.setCheckPrivate(b.dataset.ckpub, false); sfx.tap(); } catch (e) { privErr(e); } });
+  root.querySelectorAll("[data-ckpub]").forEach(b => b.onclick = async () => { if (!await askConfirm("改成大家共用？旅伴会看到这一项。")) return; try { await api.setCheckPrivate(b.dataset.ckpub, false); sfx.tap(); } catch (e) { privErr(e); } });
   bind(root, {
     settings: () => openSettings(), trips: () => openTrips(), dep: () => openDeparture(), seal: () => sealCeremony(city, d),
     mdark: () => { const t = mapTools(); t.setDark(!t.dark); render(); }, mme: () => mapTools().locate(), medit: () => { const t = mapTools(); t.setEdit(!t.editPins); render(); },
@@ -185,9 +185,9 @@ function openActivity(id) {
     done: async () => { const done = a.status !== "done"; try { await api.updateActivity(a.id, { status: done ? "done" : "planned", done_by: done ? api.me.id : null, done_at: done ? new Date().toISOString() : null }); sfx[done ? "stamp" : "tap"](); closeSheet(); } catch (e) { toast("没能保存"); } },
     main: async () => { try { await api.updateActivity(a.id, { is_main: !a.is_main }); closeSheet(); } catch (e) { toast("没能保存"); } },
     restore: async () => { try { await api.updateActivity(a.id, { status: "planned" }); closeSheet(); } catch (e) { toast("没能保存"); } },
-    rename: async () => { const n = prompt("地点名字", a.title); if (n === null) return; const note = prompt("备注（可以留空）", a.note || ""); if (note === null) return; try { await api.updateActivity(a.id, { title: n.trim() || a.title, note: note.trim() || null }); closeSheet(); } catch (e) { toast("没能保存"); } },
+    rename: async () => { const n = await askText("地点名字", a.title); if (n === null) return; const note = await askText("备注（可以留空）", a.note || ""); if (note === null) return; try { await api.updateActivity(a.id, { title: n.trim() || a.title, note: note.trim() || null }); closeSheet(); } catch (e) { toast("没能保存"); } },
     time: () => openTimeEdit(a),
-    del: async () => { if (!confirm(`删除「${a.title}」？所有人的行程都会删除这一项。`)) return; try { await api.deleteActivity(a.id); closeSheet(); } catch (e) { toast("没能删除"); } }
+    del: async () => { if (!await askConfirm(`删除「${a.title}」？所有人的行程都会删除这一项。`)) return; try { await api.deleteActivity(a.id); closeSheet(); } catch (e) { toast("没能删除"); } }
   });
 }
 
@@ -249,8 +249,8 @@ function wireGuide(root) {
   const rail = root.querySelector("#gkRail"); if (rail) { let t; rail.addEventListener("scroll", () => { clearTimeout(t); t = setTimeout(() => { const i = Math.round(rail.scrollLeft / rail.clientWidth); root.querySelectorAll("#gkDots i").forEach((d, k) => d.classList.toggle("on", k === i)); const idx = root.querySelector("#gkIdx"); if (idx) idx.textContent = `${i + 1} / ${rail.children.length}`; }, 60); }, { passive: true }); }
   root.querySelectorAll("[data-gcity]").forEach(b => b.onclick = () => { gCity = b.dataset.gcity; sfx.tap(); render(); });
   root.querySelectorAll("[data-addplan]").forEach(b => b.onclick = () => openAdd({ name: b.dataset.addplan }));
-  root.querySelectorAll("[data-exp]").forEach(b => b.onclick = () => { const n = b.dataset.exp; openCheckin({ name: n, city: gCity, date: today(), kind: "experience", mission: { type: "place", text: `体验「${n}」，拍一张最能代表这次体验的照片` }, onDone: () => setTimeout(() => { if (confirm(`要把「${n}」的花费记进账本吗？`)) openExpense({ category: "Experience", note: n, shared: false }); }, 900) }); });
-  root.querySelectorAll("[data-delc]").forEach(b => b.onclick = async () => { if (!confirm("删除这一项？")) return; try { await api.deleteCustom(b.dataset.delc); } catch (e) { toast("没能删除"); } });
+  root.querySelectorAll("[data-exp]").forEach(b => b.onclick = () => { const n = b.dataset.exp; openCheckin({ name: n, city: gCity, date: today(), kind: "experience", mission: { type: "place", text: `体验「${n}」，拍一张最能代表这次体验的照片` }, onDone: () => setTimeout(async () => { if (await askConfirm(`要把「${n}」的花费记进账本吗？`)) openExpense({ category: "Experience", note: n, shared: false }); }, 900) }); });
+  root.querySelectorAll("[data-delc]").forEach(b => b.onclick = async () => { if (!await askConfirm("删除这一项？")) return; try { await api.deleteCustom(b.dataset.delc); } catch (e) { toast("没能删除"); } });
   bind(root, { gadd: () => openCustom(), gmore: () => openCustom(true) });
 }
 function openCustom(newCity) {

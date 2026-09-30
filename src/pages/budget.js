@@ -8,7 +8,7 @@ import { guideFor } from "../data/guides.js";
 import { t as T } from "../lib/i18n.js";
 import { api, on, nameOf } from "../lib/api.js";
 import { $, esc, today, shortDate, weekday } from "../lib/util.js";
-import { openSheet, closeSheet, toast, bind } from "../lib/ui.js";
+import { openSheet, closeSheet, toast, bind, askConfirm, askText } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
 import { tripDays } from "./trip.js";
 import { HOTEL_COSTS } from "../data/fujian.js";
@@ -95,11 +95,28 @@ export function render() {
     <div class="sk-sec-h">HISTORY <b>记录</b></div>
     <div class="bg-list">${Object.keys(byDate).sort().reverse().map(dd => `<div class="log-day">${shortDate(dd)} ${weekday(dd)} · 你 ${money(spentOn(dd))}</div>${byDate[dd].map(e => `<div class="bg-row"><span class="ci">${catOf(e.category)[2]}</span><span class="bg-main"><b>${esc(e.note || catOf(e.category)[1])}</b>${e.currency && e.currency !== homeCur(cfg()) ? `<small>${fmtIn(e.amount, e.currency)} → ${money(+e.amount_base)}</small>` : ""}${G && e.shared !== false ? `<small>${esc(nameOf(e.payer_id || e.user_id))} 付的 · 你的份额 ${money(myShare(e))}</small>` : ""}${tag(e) ? `<small>${tag(e)}</small>` : ""}</span><em class="bg-amt">${money(+e.amount_base)}</em><button class="ed" data-edit="${e.id}">改</button><button class="x" data-del="${e.id}" aria-label="删除">×</button><button class="rowhit" data-edit="${e.id}" aria-label="改"></button></div>`).join("")}`).join("") || `<p class="log-empty">还没有记账。花了钱就点下面的按钮。</p>`}</div>
     <button class="fab" data-act="add" aria-label="记一笔">＋ 记一笔</button>`;
+  splitTabs(root);
   const pb = root.querySelector("[data-act=poolin]"); if (pb) pb.onclick = () => openAdd({ category: "Pool" });
   root.querySelectorAll("[data-mode]").forEach(b => b.onclick = async () => { sfx.tap(); try { await api.updateBudget({ budget_mode: b.dataset.mode }); } catch (e) { toast("没能保存"); } render(); });
   root.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => { const e = exps.find(x => x.id === b.dataset.edit); if (e) openAdd({ edit: e }); });
-  root.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!confirm("删除这一笔？")) return; try { await api.deleteExpense(b.dataset.del); } catch (e) { toast("没能删除"); } });
+  root.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => { if (!await askConfirm("删除这一笔？")) return; try { await api.deleteExpense(b.dataset.del); } catch (e) { toast("没能删除"); } });
   bind(root, { add: () => openAdd({ date: d }), cfg: openCfg, addPre: () => openAdd({ date: d, pre: true }), import: openImport });
+}
+/* 今天 / 结算 / 全部: the ledger is long, so it is shown one part at a time */
+let bTab = (() => { try { return sessionStorage.getItem("td-btab") || "today"; } catch (e) { return "today"; } })();
+function splitTabs(root) {
+  let cur = "today";
+  for (const el of [...root.children]) {
+    if (el.classList.contains("tp-top") || el.classList.contains("fab")) continue;
+    if (el.classList.contains("sk-sec-h")) { const k = el.textContent; cur = /POOL|MY BILL|SETTLE/.test(k) ? "settle" : /PREPAID|OVERVIEW|CATEGORIES/.test(k) ? "all" : "today"; }
+    el.dataset.bt = cur;
+  }
+  const bar = document.createElement("div"); bar.className = "bg-tabs"; bar.setAttribute("role", "tablist");
+  bar.innerHTML = [["today", T("今天", "Today")], ["settle", T("结算", "Settle")], ["all", T("全部", "Overview")]].map(([k, n]) => `<button role="tab" data-bt-k="${k}" aria-selected="${k === bTab}">${n}</button>`).join("");
+  const top = root.querySelector(".tp-top"); top ? top.after(bar) : root.prepend(bar);
+  const set = k => { bTab = k; try { sessionStorage.setItem("td-btab", k); } catch (e) {} root.dataset.tab = k; bar.querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.btK === k)); };
+  bar.querySelectorAll("button").forEach(b => b.onclick = () => { sfx.tap(); set(b.dataset.btK); root.scrollIntoView({ block: "start" }); });
+  set(bTab);
 }
 /* opts: { date, pre, category, note, amount, shared, onSaved } */
 export function openAdd(opts = {}) {
@@ -134,7 +151,7 @@ export function openAdd(opts = {}) {
   sh.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { paidFrom = b.dataset.pf; sh.querySelectorAll("[data-pf]").forEach(x => x.classList.toggle("on", x === b)); });
   const ph = $("exPhoto"); if (ph) { ph.querySelector("input").onchange = async e => { const f = e.target.files && e.target.files[0]; if (!f) return; photo = await shrinkImage(f, api.mode === "local" ? 600 : 1280, .8); ph.querySelector("span").innerHTML = `<img src="${photo}" alt=""> ${T("已选好，记下时一起存", "Ready — saved with the expense")}`; }; }
   $("exAmt").oninput = conv; conv();
-  bind(sh, { cancel: () => closeSheet(), delete: async () => { if (!confirm("删除这一笔？")) return; try { await api.deleteExpense(E.id); closeSheet(); opts.onSaved && opts.onSaved(); } catch (e) { toast("没能删：" + e.message); } }, save: async () => { const v = val(); if (!(v > 0)) return toast("写上金额"); const b = toBase(v, cur, c);
+  bind(sh, { cancel: () => closeSheet(), delete: async () => { if (!await askConfirm("删除这一笔？")) return; try { await api.deleteExpense(E.id); closeSheet(); opts.onSaved && opts.onSaved(); } catch (e) { toast("没能删：" + e.message); } }, save: async () => { const v = val(); if (!(v > 0)) return toast("写上金额"); const b = toBase(v, cur, c);
     const note = (($("exNote2") || {}).value || $("exNote").value || "").trim() || (opts.pre ? catOf(catK)[1] : null);
     try { const rec = { date: opts.pre ? (E ? E.date : days[0]) : $("exDate").value, amount: v, currency: cur, amount_base: Math.round(b * 100) / 100, category: catK, note, prepaid: !!opts.pre, split: 1, shared: isPoolIn ? true : (G ? shared : true), participants: G && shared && parts.length !== api.members.length ? parts : null, paid_from: !isPoolIn && shared !== false ? paidFrom : "me", payer_id: payer, split_n: $("exSplitN") && +$("exSplitN").value > 0 ? +$("exSplitN").value : null };
       if (E) await api.updateExpense(E.id, rec); else await api.addExpense(rec);

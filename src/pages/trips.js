@@ -1,7 +1,7 @@
 /* The bookshelf: every trip is a travel book. Opens on launch so you pick which book to continue. */
 import { api, FUJIAN_TEMPLATE } from "../lib/api.js";
 import { $, esc, today, addDays, shortDate } from "../lib/util.js";
-import { openSheet, closeSheet, toast, bind, setSheet } from "../lib/ui.js";
+import { openSheet, closeSheet, toast, bind, setSheet, askConfirm, askText } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
 import { GUIDES, COUNTRIES, guideFor } from "../data/guides.js";
 import { lang, setLang, t as T } from "../lib/i18n.js";
@@ -135,7 +135,7 @@ function openDeco(el) {
   bind(sh, { close: () => { closeSheet(); openTrips(); },
     delbook: async () => { const t = api.trip, owner = api.mode === "local" || t.created_by === api.me.id, group = api.mode === "cloud" && t.kind !== "solo" && api.members.length > 1;
       const msg = owner ? (group ? `删除「${t.name}」？\n\n这是你建的旅行，删除后房间里所有人的这一本都会消失：行程、打卡、邮票、账本、照片全部删掉，不能恢复。\n\n只想自己不看，可以用「归档」。` : `删除「${t.name}」？里面的行程、打卡、账本、照片全部删掉，不能恢复。`) : `离开「${t.name}」？\n\n只是从你的档案里拿掉，旅伴那边不受影响。你打过的卡和记的账会留在房间里。`;
-      if (!confirm(msg)) return; if (owner && group && prompt(`确认删除，请输入旅行名字「${t.name}」`) !== t.name) return toast(T("名字不对，没有删", "Name didn't match"));
+      if (!await askConfirm(msg)) return; if (owner && group && await askText(`确认删除，请输入旅行名字「${t.name}」`) !== t.name) return toast(T("名字不对，没有删", "Name didn't match"));
       try { if (owner) await api.deleteTrip(t.id); else await api.leaveTripById(t.id); try { localStorage.removeItem("td-book:" + t.id); localStorage.removeItem("td-bookmeta:" + t.id); } catch (e) {} closeSheet(); toast(owner ? T("删掉了", "Deleted") : T("离开了", "Left")); setTimeout(() => openTrips(), 300); } catch (e) { toast(T("没能删：", "Couldn't: ") + e.message); } } });
 }
 

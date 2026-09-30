@@ -1,7 +1,7 @@
 import { api, on, nameOf } from "../lib/api.js";
 import { ic } from "../lib/icons.js";
 import { $, esc, seeded, shrinkImage, dataUrlToBlob, wait, buzz, today, fmtMin, shortDate } from "../lib/util.js";
-import { openSheet, setSheet, closeSheet, toast, bind, lockSheet, sheetOpen } from "../lib/ui.js";
+import { openSheet, setSheet, closeSheet, toast, bind, lockSheet, sheetOpen, askConfirm, askText } from "../lib/ui.js";
 import { sfx } from "../lib/sound.js";
 import { missionFor as pickMission, missionIcon } from "../data/missions.js";
 import { hash } from "../lib/util.js";
@@ -114,7 +114,7 @@ export async function openReview(id) {
     <div class="as-btns"><div class="row"><button class="btn" data-act="no">再拍一张吧</button><button class="btn ink" data-act="ok">✓ 通过，盖章</button></div></div></div>`, { accent: "#c8472f" });
   bind(sh, {
     ok: async () => { lockSheet(true); try { await api.reviewCheckin(c.id, true); lockSheet(false); const el = sh.querySelector(".pol-stamp"); el.classList.add("on"); sfx.stamp(); buzz([20, 40, 20]); setTimeout(() => { closeSheet(); toast(`已帮${nameOf(c.user_id)}盖上「${short(c.name)}」的章`); }, 900); } catch (e) { lockSheet(false); toast(/ALREADY/.test(e.message) ? "已经有人确认过了" : "没能确认：" + e.message); closeSheet(); } },
-    no: () => { const note = prompt("想跟TA说什么？（可以不写）", "照片好像还不太符合任务") || null; api.reviewCheckin(c.id, false, note).then(() => { closeSheet(); toast("已经告诉TA再拍一张"); }).catch(e => toast("没能提交：" + e.message)); }
+    no: async () => { const note = await askText("想跟TA说什么？（可以不写）", "照片好像还不太符合任务") || null; api.reviewCheckin(c.id, false, note).then(() => { closeSheet(); toast("已经告诉TA再拍一张"); }).catch(e => toast("没能提交：" + e.message)); }
   });
 }
 export function reviewInboxHTML() {

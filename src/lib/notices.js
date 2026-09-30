@@ -16,19 +16,22 @@ export function line(l) { const who = nameOf(l.user_id), me = l.user_id === api.
   if (l.action === "EFFECT") return `失控：${l.effect || ""}`;
   if (l.action === "PLAY") return `✦ ${me ? "你" : who}${l.effect || "玩了一局"}`;
   if (l.action === "DICE") return `🎲 ${me ? "你" : who}${l.effect || "掷了骰子"}`;
+  if (l.action === "COMMENT") return `💬 ${me ? "你" : who}评论了照片：${l.effect || ""}`;
+  if (l.action === "LIGHT") return `✦ ${l.effect || who + "点亮了一枚灰章"}`;
   if (l.action === "DRAWN") return `${me ? "你" : who}抽了一张牌`;
   return `${who} ${l.effect || l.action}`; }
+const QUIET = new Set(["DRAWN", "LIKE", "UNLIKE", "LIGHTREQ"]);
 async function load(first) {
   if (!api.trip) return; try { seen = +localStorage.getItem(KEY()) || (first ? Date.now() : 0); } catch (e) {}
   let L = []; try { L = await api.log(); } catch (e) { return; }
-  const fresh = L.filter(l => Date.parse(l.created_at) > seen && l.user_id !== api.me.id && l.action !== "DRAWN");
+  const fresh = L.filter(l => Date.parse(l.created_at) > seen && l.user_id !== api.me.id && !QUIET.has(l.action));
   if (!first) fresh.slice(0, 3).forEach(l => { toast(line(l)); if (l.action === "ACTIVATED" && l.card) { cardFx(l.card); buzz([30, 40, 30]); } });
   items = L; paintBadge(); document.dispatchEvent(new CustomEvent("notices"));
 }
 function paintBadge() { const n = unread(); document.querySelectorAll(".bell-n").forEach(b => { b.textContent = n > 9 ? "9+" : n || ""; b.classList.toggle("on", n > 0); }); const t = document.getElementById("tab-play"); const tb = t && t.querySelector(".badge"); if (tb) tb.classList.remove("on"); }
 export async function openActivity() {
   const { openSheet, closeSheet, bind } = await import("./ui.js"); const { esc } = await import("./util.js");
-  const byDay = {}; items.filter(l => l.action !== "DRAWN").forEach(l => (byDay[l.date] = byDay[l.date] || []).push(l));
+  const byDay = {}; items.filter(l => !QUIET.has(l.action)).forEach(l => (byDay[l.date] = byDay[l.date] || []).push(l));
   const last = seen;
   const sh = openSheet(`<div class="as act-panel"><small class="as-k">ACTIVITY</small><h3>动态</h3>
     ${countdownHTML() || ""}
