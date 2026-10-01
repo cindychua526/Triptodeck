@@ -1,4 +1,5 @@
-// Trip Deck 配置：把 Supabase 项目的地址和 anon key 填进来，留空就只存在手机里
+// Trip Deck 配置：一般不用填。部署在 Netlify 时会自动用你原来设好的环境变量
+// VITE_SUPABASE_URL 和 VITE_SUPABASE_ANON_KEY（和旧版一样）。只有不在 Netlify 上时才需要手动填这里。
 window.TD_CONFIG = {
   supabaseUrl: "",          // 例如 https://xxxx.supabase.co
   supabaseAnonKey: "",      // Supabase → Settings → API → anon public
