@@ -1,7 +1,7 @@
 /* Trip Deck service worker
    App files (page, scripts, config) are fetched from the network first, so every new deploy shows up right away.
    The saved copy is only used when there's no network. */
-const V = "td3-20261002040659";
+const V = "td3-20261004040641";
 const SHELL = ["/", "/index.html", "/config.js", "/sync.js", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -10,3 +10,9 @@ self.addEventListener("fetch", e => { const u = new URL(e.request.url); if(e.req
   if(u.origin === location.origin){ if(u.pathname.startsWith("/api/")) return; if(e.request.mode === "navigate" || /\.(html|js|webmanifest)$/.test(u.pathname) || u.pathname === "/"){ e.respondWith(netFirst(e.request)); return; }
     e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => { if(n.ok){ const c = n.clone(); caches.open(V).then(x => x.put(e.request, c)); } return n; }))); return; }
   if(/cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|fonts\.(googleapis|gstatic)\.com/.test(u.host)){ e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(n => { const c = n.clone(); caches.open(V).then(x => x.put(e.request, c)); return n; }))); } });
+
+/* notifications from travel buddies, shown even when the app is closed */
+self.addEventListener("push", e => { let d = {}; try{ d = e.data ? e.data.json() : {}; }catch(err){ d = { body: e.data && e.data.text() }; }
+  e.waitUntil(self.registration.showNotification(d.title || "旅行手账", { body: d.body || "", tag: d.tag || "td", renotify: true, icon: "/icons/icon-192.png", badge: "/icons/favicon-64.png", data: { url: d.url || "/" } })); });
+self.addEventListener("notificationclick", e => { e.notification.close(); const url = (e.notification.data && e.notification.data.url) || "/";
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(L => { for(const c of L){ if("focus" in c) return c.focus(); } return self.clients.openWindow(url); })); });

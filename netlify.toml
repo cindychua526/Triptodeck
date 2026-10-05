@@ -1,6 +1,10 @@
 [build]
+  command = "echo 静态网站，不用打包"
   publish = "."
   functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"

@@ -23,27 +23,13 @@ Excel 五张表：`旅行`（名称、日期、城市、预算、你的货币、
 城市写中文（厦门、潮汕、吉隆坡……），有资料的城市会自动带上景点、美食、坐标、宾果任务和城市印章。
 
 ## 部署 · 三步
+1. **数据库**：Supabase → SQL Editor，把 `supabase/schema_v1.sql` 整份贴进去运行一次。
+   - 要把以前的旅行全部清掉、重新开始：先跑 `supabase/reset_all.sql`，再跑 `schema_v1.sql`。
+   - Authentication → Providers 打开 **Anonymous sign-ins**。
+   - `supabase/old/` 里是以前一层一层的旧文件，只留作记录，不用再跑。
+2. **网站**：把整个文件夹拖进 Netlify（或连 Git）。原来设好的 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY` 环境变量不用动，新版会自动读。
+3. **手机**：打开网站，加到主屏幕。
 
-### 1. Supabase
-1. 新建项目（或者用现有的）。
-2. **Authentication → Providers → Anonymous sign-ins** 打开。
-3. **SQL Editor** 里按顺序运行：
-   - 新项目：`schema.sql` → `migration_2.sql` → `migration_3.sql` → `migration_4.sql` → `migration_5.sql` → `migration_6.sql`
-   - 老项目（已经跑过前面的）：只跑 `migration_6.sql`
-4. **Settings → API** 复制 `Project URL` 和 `anon public` key。
-
-### 2. 填配置
-打开 `config.js`：
-```js
-supabaseUrl: "https://xxxx.supabase.co",
-supabaseAnonKey: "eyJ……",
-```
-留空的话 App 也能用，只是所有东西只存在这台手机里。
-
-### 3. Netlify
-- 把这个文件夹拖进 Netlify（Sites → Add new site → Deploy manually），或者连上 Git 仓库。
-- 不需要 build 命令，`netlify.toml` 已经写好：发布目录是根目录，函数在 `netlify/functions`。
-- 部署完打开网址，Safari 用「添加到主屏幕」，安卓用「安装应用」。
 
 ## 数据怎么存
 - **共享（房间里所有人）**：相册、评论、账本、旅行书、动态 → `trip_state`，实时同步。
@@ -63,3 +49,22 @@ npx serve .        # 或 python3 -m http.server 8000
 - 下拉首页可以刷新，拿到旅伴刚记的账和照片。
 - 计步用手机的运动传感器，只在 App 打开时计数；做成原生壳（Capacitor）以后可以读健康数据。
 - Push 推送（原版的 `push.mjs`）这一版没接，需要的话把原来的函数和 `push_subs` 表接回来即可。
+
+## 源代码
+`source/` 里是这个版本整理后的源代码，以后改功能只改这里：
+- `tripdeck.js` —— 全部 App 逻辑（一份文件，不再是一层盖一层）
+- `tripdeck.css` —— 全部样式
+- `shell.html` —— 页面外壳
+`index.html` 是用这三份加上图片数据打包出来的成品，部署用它就好。
+
+## 通知（App 关着也能收到旅伴的消息）
+在 Netlify → Site configuration → Environment variables 加这几个（加完重新部署一次）：
+- `SUPABASE_SERVICE_ROLE_KEY`：Supabase → Project Settings → API → `service_role`（保密，不要放进网站文件里）
+- `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`：通知钥匙。如果旧版已经设过 `VITE_VAPID_PUBLIC_KEY` 和 `VAPID_PRIVATE_KEY`，直接沿用，不用换。没有的话用另外给你的「通知钥匙.txt」。
+- `VAPID_SUBJECT`（可不填）：`mailto:你的邮箱`
+
+手机上：设置 → 通知 → 打开。iPhone 要先把 App「加到主屏幕」，再从主屏幕打开，才能开通知（iOS 16.4 以上）。
+会通知的事：旅伴发动技能 / 射掉行程 / 催雨落雪、有人打卡等你确认、你的打卡被确认、有人开了一局猜价格。
+
+## 照片隐私
+照片存在私密的 `media` 桶里，只有同一个房间的人拿得到（App 用 7 天有效的临时链接显示，会自动更新）。旧版上传过的公开照片，新版打开时会自动改用私密链接。

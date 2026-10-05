@@ -20,39 +20,51 @@ const REF = {};            // blob url -> durable ref ("idb:key" or https url)
 const LIVE = {};           // durable "idb:key" -> blob url (for showing)
 const isBlob = u => typeof u === "string" && u.startsWith("blob:");
 function walk(v, fn, d = 0){ if(d > 14 || v == null) return v; if(typeof v === "string") return fn(v); if(Array.isArray(v)){ for(let i = 0; i < v.length; i++) v[i] = walk(v[i], fn, d + 1); return v; } if(typeof v === "object" && !(v instanceof Set)){ for(const k of Object.keys(v)) v[k] = walk(v[k], fn, d + 1); } return v; }
-const toDurable = o => walk(clone(o), s => isBlob(s) ? (REF[s] || "") : s);
+const PUB = "/storage/v1/object/public/media/", SIGN = "/storage/v1/object/sign/media/";
+const sbPath = s => { if(typeof s !== "string") return null; if(s.startsWith("sb:media/")) return s.slice(9); let i = s.indexOf(PUB); if(i >= 0) return decodeURIComponent(s.slice(i + PUB.length).split("?")[0]); i = s.indexOf(SIGN); if(i >= 0) return decodeURIComponent(s.slice(i + SIGN.length).split("?")[0]); return null; };
+const toDurable = o => walk(clone(o), s => { if(isBlob(s)) return REF[s] || ""; if(typeof s === "string" && s.startsWith("http")){ const p = sbPath(s); if(p) return "sb:media/" + p; } return s; });
+/* photos are private to the room: turn stored refs (and old public links) into short-lived signed links */
+async function signAll(o){ if(!remote) return o; const paths = new Set(); walk(o, s => { const p = sbPath(s); if(p) paths.add(p); return s; });
+  const need = [...paths].filter(p => !LIVE["sb:media/" + p]);
+  for(let i = 0; i < need.length; i += 100){ try{ const r = await remote.sb.storage.from("media").createSignedUrls(need.slice(i, i + 100), 604800); (r.data || []).forEach(x => { if(x.signedUrl){ LIVE["sb:media/" + x.path] = x.signedUrl; REF[x.signedUrl] = "sb:media/" + x.path; } }); }catch(e){} }
+  return walk(o, s => { const p = sbPath(s); return p && LIVE["sb:media/" + p] ? LIVE["sb:media/" + p] : s; }); }
 async function toLive(o){ const keys = new Set(); walk(o, s => { if(typeof s === "string" && s.startsWith("idb:") && !LIVE[s]) keys.add(s); return s; });
   for(const k of keys){ try{ const b = await idb.get(k.slice(4)); if(b){ const u = URL.createObjectURL(b); LIVE[k] = u; REF[u] = k; } }catch(e){} }
-  return walk(o, s => typeof s === "string" && s.startsWith("idb:") ? (LIVE[s] || s) : s); }
+  const out = walk(o, s => typeof s === "string" && s.startsWith("idb:") ? (LIVE[s] || s) : s); return remote ? await signAll(out) : out; }
 async function storeBlob(url, room){ const blob = await (await fetch(url)).blob(); const ext = ((blob.type.split("/")[1] || "bin").replace("jpeg", "jpg").split(";")[0]);
-  if(remote && room){ const path = `${room}/${remote.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`; const r = await remote.sb.storage.from("media").upload(path, blob, { contentType: blob.type, upsert:false }); if(!r.error) return remote.sb.storage.from("media").getPublicUrl(path).data.publicUrl; }
+  if(remote && room){ const path = `${room}/${remote.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`; const r = await remote.sb.storage.from("media").upload(path, blob, { contentType: blob.type, upsert:false }); if(!r.error){ const ref = "sb:media/" + path; const sg = await remote.sb.storage.from("media").createSignedUrl(path, 604800); if(sg.data && sg.data.signedUrl){ LIVE[ref] = sg.data.signedUrl; REF[sg.data.signedUrl] = ref; } return ref; } }
   const key = `m-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; await idb.put(key, blob); LIVE["idb:" + key] = url; return "idb:" + key; }
 async function flushBlobs(obj, room){ const urls = new Set(); walk(obj, s => { if(isBlob(s) && !REF[s]) urls.add(s); return s; }); for(const u of urls){ try{ REF[u] = await storeBlob(u, room); }catch(e){} } }
 async function upgradeIdbRefs(book){ if(!remote || !book.room) return; const st = book.state; if(!st) return; const refs = new Set(); walk(st, s => { if(typeof s === "string" && s.startsWith("idb:")) refs.add(s); return s; }); }
 
 /* ---- the bookshelf as data ---- */
 const needsPush = (remoteB, merged) => { const k = x => JSON.stringify([(x.state && x.state.exp || []).map(e => e.id || e.t).sort(), (x.state && x.state.checkins || []).map(c => c.id || c.title).sort(), (x.state && x.state.album || []).map(a => a[0]).sort(), (x.state && x.state.del || []).slice().sort()]); return k(remoteB) !== k(merged); };
+window.TD_REF = u => REF[u] || u;
 const djb = s => { let h = 5381; for(let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
 function serBook(b){ const o = { ...b }; delete o.cur; delete o._fresh; return toDurable(o); }
-function privData(){ return { privBy: S.privBy, me:S.me || "", avatar:S.avatar || "", keeps:S.keeps, tipsSeen: !!S.tipsSeen, fortune:S.fortune, secretDone:S.secretDone, stepsByDay:S.steps, sets:SETS }; }
-function applyPrivData(o){ if(!o) return; if(window.TD_SAFE) window.TD_SAFE(o); if(o.privBy) S.privBy = { ...(S.privBy || {}), ...o.privBy }; if(o.me && !S.me) S.me = o.me; if(o.avatar){ S.avatar = o.avatar; if(FRIENDS[0]) FRIENDS[0][2] = o.avatar; } if(o.keeps) S.keeps = o.keeps; if(o.tipsSeen) S.tipsSeen = true; if(o.fortune) S.fortune = o.fortune; if(o.secretDone) S.secretDone = o.secretDone; if(o.stepsByDay) S.steps = { ...(S.steps || {}), ...o.stepsByDay }; if(o.sets) Object.assign(SETS, o.sets); }
+function privData(){ return { found: S.found || [], suitcase: S.suitcase, pushOn: !!S.pushOn, privBy: S.privBy, me:S.me || "", avatar:S.avatar || "", keeps:S.keeps, tipsSeen: !!S.tipsSeen, fortune:S.fortune, secretDone:S.secretDone, stepsByDay:S.steps, sets:SETS }; }
+function applyPrivData(o){ if(!o) return; if(window.TD_SAFE) window.TD_SAFE(o); if(o.pushOn) S.pushOn = true; if(Array.isArray(o.found)) S.found = [...new Set([...(S.found || []), ...o.found])]; if(o.suitcase) S.suitcase = { ...(S.suitcase || {}), ...o.suitcase }; if(o.privBy) S.privBy = { ...(S.privBy || {}), ...o.privBy }; if(o.me && !S.me) S.me = o.me; if(o.avatar){ S.avatar = o.avatar; if(FRIENDS[0]) FRIENDS[0][2] = o.avatar; } if(o.keeps) S.keeps = o.keeps; if(o.tipsSeen) S.tipsSeen = true; if(o.fortune) S.fortune = o.fortune; if(o.secretDone) S.secretDone = o.secretDone; if(o.stepsByDay) S.steps = { ...(S.steps || {}), ...o.stepsByDay }; if(o.sets) Object.assign(SETS, o.sets); }
 /* merge a book from the room with the one on this phone: lists are combined, nothing a buddy added is lost */
-const keyOf = { album: r => Array.isArray(r) ? r[0] : r, checkins: c => c.id || [c.title, c.date, c.at].join("|"), exp: e => e.id || [e.t, e.at, e.rm, e.who].join("|"), decisions: d => [d.q, d.at, d.who, d.r].join("|"), feed: f => [f.t, f.s].join("|") };
+const keyOf = { album: r => "a:" + (Array.isArray(r) ? (REF[r[0]] || r[0]) : r), checkins: c => c.id || [c.title, c.date, c.at].join("|"), exp: e => e.id || [e.t, e.at, e.rm, e.who].join("|"), decisions: d => [d.q, d.at, d.who, d.r].join("|"), feed: f => [f.t, f.s].join("|") };
 function mergeList(a = [], b = [], key, del = []){ const out = [], seen = new Map(); const dead = new Set(del);
   for(const x of [...a, ...b]){ const k = key(x); if(!k || dead.has(k)) continue; if(!seen.has(k)){ seen.set(k, out.length); out.push(x); } else { const i = seen.get(k), y = out[i]; if((x && x.u || 0) > (y && y.u || 0)) out[i] = x; } } return out; }
 function mergeBook(remoteB, localB){ if(!remoteB) return localB; if(!localB) return remoteB;
   const newer = (remoteB.rev || 0) > (localB.rev || 0) ? remoteB : localB, m = { ...newer, room: localB.room || remoteB.room, cur: localB.cur };
   const a = remoteB.state || {}, b = localB.state || {}, del = [...new Set([...(a.del || []), ...(b.del || [])])];
   m.state = { ...a, ...b, del,
-    album: mergeList(b.album, a.album, keyOf.album), checkins: mergeList(b.checkins, a.checkins, keyOf.checkins, del), exp: mergeList(b.exp, a.exp, keyOf.exp, del),
+    album: (() => { const L = mergeList(b.album, a.album, keyOf.album, del), other = new Map((a.album || []).map(r => [keyOf.album(r), r])); return L.map(r => { const o = other.get(keyOf.album(r)); if(!o || o === r) return r; const m2 = r.slice(); const me = S.me || "我"; m2[5] = [...new Set([...(o[5] || []).filter(n => n !== me), ...((r[5] || []).includes(me) ? [me] : [])])]; m2[8] = mergeList(r[8] || [], o[8] || [], c => c.join("|")); return m2; }); })(), checkins: mergeList(b.checkins, a.checkins, keyOf.checkins, del), exp: mergeList(b.exp, a.exp, keyOf.exp, del),
     decisions: mergeList(b.decisions, a.decisions, keyOf.decisions), feed: mergeList(b.feed, a.feed, keyOf.feed).slice(0, 60),
     cmts: (() => { const o = { ...(a.cmts || {}) }; for(const [k, L] of Object.entries(b.cmts || {})) o[k] = mergeList(L, o[k] || [], c => c.join("|")); return o; })(),
-    games: typeof mergeGames === "function" ? mergeGames(a.games, b.games) : (b.games || a.games) };
+    games: typeof mergeGames === "function" ? mergeGames(a.games, b.games) : (b.games || a.games),
+    avatars: (() => { const me = window.TD_UID, out = { ...(a.avatars || {}), ...(b.avatars || {}) }; for(const [k, v] of Object.entries(a.avatars || {})) if(k !== me) out[k] = v; return out; })(),
+    fx: (() => { const x = a.fx, y = b.fx, d = typeof TDATE === "function" ? TDATE() : ""; if(!x || x.day !== d) return y; if(!y || y.day !== d) return x;
+      const added = [...(y.added || [])]; (x.added || []).forEach(t => { if(!added.some(z => z.title === t.title)) added.push(t); });
+      return { ...x, ...y, cut:{ ...(x.cut || {}), ...(y.cut || {}) }, added, shift:Math.max(x.shift || 0, y.shift || 0), lost:Math.max(x.lost || 0, y.lost || 0), grey:x.grey || y.grey, banner: y.banner || x.banner }; })() };
   m.rev = Math.max(remoteB.rev || 0, localB.rev || 0); return m; }
 /* ---- local save ---- */
 let timer = 0, saving = false, lastLocal = "";
 function stashCur(){ if(window.TD_STASH) window.TD_STASH(); }
-function saveLocal(){ if(window.TD_RESTORING) return; stashCur(); const data = JSON.stringify({ v:4, cur:S.curBook || null, books: BOOKS2.map(serBook) }); if(data !== lastLocal){ try{ localStorage.setItem(LSK + "books", data); localStorage.setItem(LSK + "priv", JSON.stringify(toDurable(privData()))); lastLocal = data; }catch(e){ console.warn("local save", e); } } }
+let lastPriv = ""; function saveLocal(){ if(window.TD_RESTORING) return; stashCur(); const data = JSON.stringify({ v:4, cur:S.curBook || null, books: BOOKS2.map(serBook) }), pv = JSON.stringify(toDurable(privData())); try{ if(data !== lastLocal){ localStorage.setItem(LSK + "books", data); lastLocal = data; } if(pv !== lastPriv){ localStorage.setItem(LSK + "priv", pv); lastPriv = pv; } }catch(e){ console.warn("local save", e); } }
 async function save(){ if(saving || window.TD_RESTORING) return; saving = true;
   try{ stashCur(); for(const b of BOOKS2) await flushBlobs(b, b.room); await flushBlobs(privData(), null); saveLocal(); if(remote) await pushRooms(); }
   catch(e){ console.warn(e); setStatus(remote ? "err" : "off", remote ? "同步失败，先存在手机里：" + (e.message || e) : st.t); }
@@ -63,8 +75,6 @@ window.addEventListener("pagehide", () => { try{ saveLocal(); }catch(e){} });
 /* ---- load from this phone (also upgrades data saved by earlier versions) ---- */
 async function loadLocal(){ try{
     let data = JSON.parse(localStorage.getItem(LSK + "books") || "null"); const pv = JSON.parse(localStorage.getItem(LSK + "priv") || "null");
-    if(!data){ const old = JSON.parse(localStorage.getItem(LSK + "shared") || "null"); if(old && old.books){ data = { v:4, cur:old.cur, books:old.books }; const cb = data.books.find(b => b.id === old.cur) || data.books[0];
-        if(cb && !cb.state) cb.state = { album:old.album || [], cmts:old.cmts || {}, exp:old.exp || [], checkins:old.checkins || [], decisions:old.decisions || [], games:old.games, feed:old.feed || [] }; } }
     if(pv) applyPrivData(await toLive(pv));
     if(data && data.books){ const books = await toLive(data.books); if(window.TD_SAFE) window.TD_SAFE(books); fill(BOOKS2, books); if(data.cur) S.curBook = data.cur; }
     lastLocal = ""; bootTrip(); }catch(e){ console.warn("local load", e); bootTrip(); } }
@@ -86,21 +96,15 @@ async function pushRooms(){ const sb = remote.sb, uid = remote.uid;
   const cb = BOOKS2.find(b => b.cur);
   if(cb && cb.room){ const pv = toDurable(privData()); const w = await sb.from("member_state").upsert({ trip_id: cb.room, user_id: uid, state: pv, updated_at: new Date().toISOString() }); if(w.error) console.warn(w.error); }
   if(cb && cb.room) setStatus("on", `已同步 · 房间 ${cb.code || window.ROOM_CODE || ""}`); }
-function setRoom(t){ remote.trip = t; window.ROOM_CODE = t.code; window.ROOM_ID = t.id; }
+function setRoom(t){ remote.trip = t; window.ROOM_CODE = t.code; window.ROOM_ID = t.id; window.ROOM_OWNER = t.created_by || window.ROOM_OWNER || null; }
 async function loadMembers(roomId){ const sb = remote.sb; const m = await sb.from("trip_members").select("user_id, joined_at").eq("trip_id", roomId).order("joined_at"); if(m.error || !m.data) return;
   const ids = m.data.map(x => x.user_id), p = ids.length ? await sb.from("profiles").select("id, display_name").in("id", ids) : { data:[] }, nm = {}; (p.data || []).forEach(x => nm[x.id] = x.display_name);
   const others = m.data.filter(x => x.user_id !== remote.uid), cols = ["#E2B77A", "#9FB8D8", "#B7C9A8", "#E8A7B7", "#C9B2E8", "#F2C46A", "#9BD0C8"];
   const names = ["你", ...others.map(o => nm[o.user_id] || "旅伴")]; if(window.TD_SAFE) window.TD_SAFE(names);
-  fill(NAMES, names); fill(FRIENDS, [[(S.me || "我").slice(0, 1), cols[0], S.avatar || undefined], ...others.map((o, i) => [(names[i + 1] || "旅").slice(0, 1), cols[(i + 1) % cols.length]])]); window.TD_MEMBERS = true; remote.memberIds = m.data.map(x => x.user_id); }
+  fill(NAMES, names); const keepLocal = FRIENDS.filter(f => (f[3] || "").startsWith("n:")).map(f => [f, NAMES[FRIENDS.indexOf(f)]]); fill(FRIENDS, [[(S.me || "我").slice(0, 1), cols[0], S.avatar || undefined, remote.uid], ...others.map((o, i) => [(names[i + 1] || "旅").slice(0, 1), cols[(i + 1) % cols.length], undefined, o.user_id])]); keepLocal.forEach(([f, n]) => { FRIENDS.push(f); names.push(n); }); fill(NAMES, names); window.TD_MEMBERS = true; remote.memberIds = m.data.map(x => x.user_id); const av = S.roomAvatars || {}; FRIENDS.forEach((f, k) => { if(k > 0 && f[3] && av[f[3]]) f[2] = av[f[3]]; }); }
 function bookFromRoom(t){ return { id:"r" + t.id.slice(0, 8), room:t.id, code:t.code, t:(t.name || "旅行").slice(0, 6), sub:"还没有行程", start:t.start_date || TDATE(), end:t.end_date || t.start_date || TDATE(), ph:"sea", st:"房间里还没有行程", look:{ c:"sky", p:"plain", m:"star", rib:true, win:true, pin:false, arch:false }, trip:{ name:t.name || "旅行", start:t.start_date || TDATE(), end:t.end_date || t.start_date || TDATE(), cities:[], days:[], prepaid:[], checklist:[], source:"room" }, state:{}, rev:0 }; }
-async function roomToBook(t, stRow){ const sb = remote.sb;
+async function roomToBook(t, stRow){
   if(stRow && stRow.state && stRow.state.book){ const b = await toLive(stRow.state.book); if(window.TD_SAFE) window.TD_SAFE(b); b.room = t.id; b.code = t.code; return b; }
-  if(stRow && stRow.state && stRow.state.books){ const old = stRow.state, b0 = old.books.find(x => x.room === t.id) || old.books.find(x => x.id === old.cur) || old.books[0];
-    if(b0){ const b = await toLive(clone(b0)); b.room = t.id; b.code = t.code; if(!b.state) b.state = { album:old.album || [], cmts:old.cmts || {}, exp:old.exp || [], checkins:old.checkins || [], decisions:old.decisions || [], games:old.games, feed:old.feed || [] }; return b; } }
-  try{ const mem = await sb.from("trip_members").select("user_id, joined_at").eq("trip_id", t.id).order("joined_at"); const ids = (mem.data || []).map(x => x.user_id); const p = ids.length ? await sb.from("profiles").select("id, display_name").in("id", ids) : { data:[] };
-    const rows = (mem.data || []).map(x => ({ ...x, profiles:{ display_name:((p.data || []).find(y => y.id === x.user_id) || {}).display_name || "" } }));
-    const L = await importLegacy(sb, t, remote.uid, rows); if(L){ if(window.TD_SAFE) window.TD_SAFE(L); const b = bookFromTrip(L.T); b.room = t.id; b.code = t.code; b.state = L.st; b.rev = Date.now(); S.privBy[b.id] = L.pv; return b; } }catch(e){ console.warn("legacy", e); }
-  if((t.name || "") === "旅行手账" && !t.start_date) return null;     // an empty room an earlier version made automatically
   return bookFromRoom(t); }
 async function loadShelf(){ const sb = remote.sb;
   const mine = await sb.from("trip_members").select("trip_id, joined_at, trips(*)").eq("user_id", remote.uid).order("joined_at"); if(mine.error) throw mine.error;
@@ -108,16 +112,19 @@ async function loadShelf(){ const sb = remote.sb;
   const sts = ids.length ? await sb.from("trip_state").select("trip_id, state").in("trip_id", ids) : { data:[] }; const byId = {}; (sts.data || []).forEach(r => byId[r.trip_id] = r);
   for(const t of rooms){ const rb = await roomToBook(t, byId[t.id]); if(!rb) continue; const i = BOOKS2.findIndex(b => b.room === t.id || b.id === rb.id); if(i >= 0){ const m = mergeBook(rb, BOOKS2[i]); BOOKS2[i] = m; if(needsPush(rb, m)) pushedHash[m.id] = null; } else { BOOKS2.push(rb); pushedHash[rb.id] = djb(JSON.stringify(serBook(rb))); } }
   if(Object.values(pushedHash).some(v => v === null)) schedule();
-  const myRooms = new Set(ids); for(let i = BOOKS2.length - 1; i >= 0; i--){ const b = BOOKS2[i]; if(b.room && !myRooms.has(b.room) && !b.keepLocal) BOOKS2.splice(i, 1); } }
+  for(let i = BOOKS2.length - 1; i >= 0; i--){ const b = BOOKS2[i]; if(!b.room) continue; const j = BOOKS2.findIndex(x => x !== b && x.room === b.room); if(j >= 0 && j < i){ BOOKS2[j] = mergeBook(b, BOOKS2[j]); BOOKS2.splice(i, 1); } }
+  const myRooms = new Set(ids), gone = []; for(let i = BOOKS2.length - 1; i >= 0; i--){ const b = BOOKS2[i]; if(b.room && !myRooms.has(b.room) && !b.keepLocal){ gone.push(b); BOOKS2.splice(i, 1); } }
+  if(gone.length){ const wasCur = gone.some(b => b.cur || b.id === S.curBook); toast(`你被移出了「${gone.map(b => b.t).join("」「")}」`);
+    if(wasCur){ S.curBook = null; const next = BOOKS2.find(b => b.trip); if(next){ useBook(next.id); } else { DAYS.length = 0; ALBUM.length = 0; EXP.length = 0; S.checkins.length = 0; try{ closeOv(); closeSheet(); }catch(e){} document.getElementById("view").innerHTML = ""; window.ROOM_CODE = ""; window.ROOM_ID = null; remote.trip = null; openStart(false); } } } }
 async function enterBook(b){ if(!remote || !b) return; if(!b.room){ schedule(); setStatus("off", "正在为这本书开房间…"); return; }
-  const t = { id:b.room, code:b.code }; if(!t.code){ const r = await remote.sb.from("trips").select("id, code, name").eq("id", b.room).maybeSingle(); if(r.data){ t.code = r.data.code; b.code = r.data.code; } }
+  const t = { id:b.room, code:b.code }; window.ROOM_OWNER = null; { const r = await remote.sb.from("trips").select("id, code, name, created_by").eq("id", b.room).maybeSingle(); if(r.data){ t.code = r.data.code; b.code = r.data.code; t.created_by = r.data.created_by; } }
   setRoom(t); await loadMembers(b.room);
   const ms = await remote.sb.from("member_state").select("state").eq("trip_id", b.room).eq("user_id", remote.uid).maybeSingle(); if(ms.data && ms.data.state) applyPrivData(await toLive(ms.data.state));
   if(chan) try{ remote.sb.removeChannel(chan); }catch(e){}
   chan = remote.sb.channel("td4-" + b.room).on("postgres_changes", { event:"*", schema:"public", table:"trip_state", filter:`trip_id=eq.${b.room}` }, async p => { if(!p.new || p.new.updated_by === remote.uid || !p.new.state || !p.new.state.book) return; const rb = await toLive(p.new.state.book); if(window.TD_SAFE) window.TD_SAFE(rb); stashCur(); const i = BOOKS2.findIndex(x => x.room === b.room); if(i < 0) return; const m = mergeBook(rb, BOOKS2[i]); BOOKS2[i] = m; if(needsPush(rb, m)){ pushedHash[m.id] = null; schedule(); } if(m.cur && window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); }).subscribe();
   setStatus("on", `已连接 · 房间 ${t.code || ""}`); if(window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); }
 async function connect(){
-  if(!C.supabaseUrl || !C.supabaseAnonKey){ try{ const r = await fetch("/api/config", { cache:"no-store" }); if(r.ok){ const j = await r.json(); if(j.supabaseUrl && j.supabaseAnonKey){ C.supabaseUrl = j.supabaseUrl; C.supabaseAnonKey = j.supabaseAnonKey; } } }catch(e){} }
+  if(!C.supabaseUrl || !C.supabaseAnonKey){ try{ const r = await fetch("/api/config", { cache:"no-store" }); if(r.ok){ const j = await r.json(); if(j.supabaseUrl && j.supabaseAnonKey){ C.supabaseUrl = j.supabaseUrl; C.supabaseAnonKey = j.supabaseAnonKey; } if(j.vapidPublicKey) C.vapidPublicKey = j.vapidPublicKey; } }catch(e){} }
   if(!C.supabaseUrl || !C.supabaseAnonKey){ readyRes && readyRes(false); return; } setStatus("off", "正在连接…");
   const { createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm");
   const sb = createClient(C.supabaseUrl, C.supabaseAnonKey);
@@ -132,45 +139,41 @@ async function connect(){
     const sr = await sb.from("trip_state").select("trip_id, state").eq("trip_id", r.data.id).maybeSingle(); const b = await roomToBook(r.data, sr.data) || bookFromRoom(r.data);
     const i = BOOKS2.findIndex(x => x.room === r.data.id); if(i >= 0) BOOKS2[i] = mergeBook(b, BOOKS2[i]); else BOOKS2.push(b);
     const st0 = document.getElementById("start"); st0 && st0.remove(); useBook(BOOKS2.find(x => x.room === r.data.id).id); toast(`加入了「${r.data.name}」`); };
+  window.TD_SYNC.kick = async userId => { const r = await sb.rpc("kick_member", { p_trip: remote.trip && remote.trip.id, p_user: userId }); if(r.error){ toast(/NOT_OWNER/.test(r.error.message) ? "只有房主可以把人移出" : /function/.test(r.error.message) ? "数据库还没运行 migration_7.sql" : "移出失败：" + r.error.message); return false; } return true; };
   window.TD_SYNC.leave = async roomId => { if(!roomId) return; await sb.from("trip_members").delete().eq("trip_id", roomId).eq("user_id", uid); };
+  /* notifications when the app is closed */
+  const b64u = s => { const p = "=".repeat((4 - s.length % 4) % 4), r = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  window.TD_SYNC.push = {
+    supported: () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && !!C.vapidPublicKey,
+    needsHomeScreen: () => /iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || matchMedia("(display-mode: standalone)").matches),
+    state: () => ("Notification" in window ? Notification.permission : "unsupported"),
+    async enable(){ const perm = await Notification.requestPermission(); if(perm !== "granted") return "denied";
+      const reg = await navigator.serviceWorker.ready; let sub = await reg.pushManager.getSubscription(); if(!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64u(C.vapidPublicKey) });
+      const j = sub.toJSON(); const r = await sb.from("push_subs").upsert({ user_id:uid, trip_id: remote.trip ? remote.trip.id : null, endpoint:j.endpoint, p256dh:j.keys.p256dh, auth:j.keys.auth }, { onConflict:"endpoint" }); if(r.error) throw r.error; return "on"; },
+    async disable(){ const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(); if(sub){ await sb.from("push_subs").delete().eq("endpoint", sub.endpoint); await sub.unsubscribe(); } return "off"; },
+    async notify(title, body, tag){ if(!remote || !remote.trip) return; try{ const { data:{ session } } = await sb.auth.getSession(); if(!session) return;
+      await fetch("/api/notify", { method:"POST", headers:{ "content-type":"application/json", Authorization:`Bearer ${session.access_token}` }, body: JSON.stringify({ trip_id: remote.trip.id, title, body, tag }) }); }catch(e){} } };
   window.TD_SYNC.onSwitch = b => enterBook(b);
-  window.TD_SYNC.pull = async () => { stashCur(); await loadShelf(); const cb = BOOKS2.find(b => b.cur) || BOOKS2[0]; if(cb){ await enterBook(cb); } if(window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); };
+  window.TD_SYNC.pull = async () => { stashCur(); await loadShelf(); const cb = BOOKS2.find(b => b.cur); if(cb){ await enterBook(cb); if(window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); } };
   window.TD_SYNC.ensureRoom = async () => { await save(); return remote.trip; };
   readyRes && readyRes(true);
-  stashCur(); await loadShelf();
+  let lastSeen = "";
+  const poll = async () => { if(document.hidden || !remote || !remote.trip || saving) return; try{ const r = await sb.from("trip_state").select("state, updated_at, updated_by").eq("trip_id", remote.trip.id).maybeSingle();
+      if(!r.data || r.data.updated_at === lastSeen) return; lastSeen = r.data.updated_at; if(r.data.updated_by === uid || !r.data.state || !r.data.state.book) return;
+      const rb = await toLive(r.data.state.book); if(window.TD_SAFE) window.TD_SAFE(rb); stashCur(); const i = BOOKS2.findIndex(x => x.room === remote.trip.id); if(i < 0) return; const m = mergeBook(rb, BOOKS2[i]); BOOKS2[i] = m; if(needsPush(rb, m)){ pushedHash[m.id] = null; schedule(); } if(m.cur && window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); }catch(e){} };
+  let pollT = 0; const tick = () => { clearTimeout(pollT); pollT = setTimeout(async () => { await poll(); tick(); }, ["guess", "bingo"].includes(window.CUR_PAGE) ? 3500 : 12000); }; tick();
+  window.TD_SYNC.pollNow = poll;
+  stashCur(); for(let i = 0; i < BOOKS2.length; i++) BOOKS2[i] = await signAll(BOOKS2[i]); if(S.privBy) S.privBy = await signAll(S.privBy); await loadShelf();
   const cb = BOOKS2.find(b => b.id === S.curBook) || BOOKS2.find(b => b.trip);
   if(cb){ S.curBook = cb.id; bootTrip(); await enterBook(cb); } else { bootTrip(); setStatus("off", "已连上 · 还没有房间（开一本旅行书或输入旅伴的房间号）"); }
   schedule(); }
-const LCAT = { Lodging:["住宿","bed","#E8A864"], Flight:["交通","bus","#7FA7D6"], Food:["餐饮","bowl","#EE6A3C"], Transport:["交通","bus","#7FA7D6"], Activities:["门票","pin","#A9B7A1"], Experience:["门票","pin","#A9B7A1"], Shopping:["购物","tag","#C79BD8"], Coffee:["餐饮","bowl","#EE6A3C"], Other:["其他","tag","#9FB49A"], Pool:["其他","tag","#9FB49A"] };
-async function copyPhoto(sb, trip, uid, path){ try{ if(!path) return ""; if(path.startsWith("data:")) return path; let bucket = "checkins", p = path; if(path.startsWith("trip:")){ bucket = "trip-photos"; p = path.slice(5); }
-  const r = await sb.storage.from(bucket).download(p); if(r.error || !r.data) return ""; const np = `${trip.id}/${uid}/legacy-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}.jpg`;
-  const u = await sb.storage.from("media").upload(np, r.data, { contentType: r.data.type || "image/jpeg" }); if(u.error) return ""; return sb.storage.from("media").getPublicUrl(np).data.publicUrl; }catch(e){ return ""; } }
-async function importLegacy(sb, trip, uid, members){
-  const q = async (t, f) => { try{ const r = await (f ? f(sb.from(t).select("*").eq("trip_id", trip.id)) : sb.from(t).select("*").eq("trip_id", trip.id)); return r.error ? [] : (r.data || []); }catch(e){ return []; } };
-  const [acts, exps, cl, cks, shp, fps, decs, jr] = await Promise.all([q("activities", x => x.order("date").order("time")), q("expenses"), q("checklist_items", x => x.order("sort")), q("checkins"), q("shared_photos"), q("food_photos"), q("decisions"), q("journals")]);
-  if(!acts.length && !exps.length && !cks.length && !shp.length) return null;
-  const others = members.filter(x => x.user_id !== uid), idx = id => id === uid ? 0 : Math.max(0, others.findIndex(o => o.user_id === id) + 1), nm = id => id === uid ? "你" : ((others.find(o => o.user_id === id) || {}).profiles || {}).display_name || "旅伴";
-  const mine = members.find(x => x.user_id === uid) || {}, home = mine.currency || "MYR", rate = +(mine.cny_rate || trip.cny_rate || .6), G = window.ORIG && window.ORIG.guideFor;
-  const byDate = {}; acts.filter(a => a.status !== "removed").forEach(a => { (byDate[a.date] = byDate[a.date] || { date:a.date, city:a.city || (trip.cities || [])[0] || trip.name, title:"", items:[] }).items.push({ t:(a.time || "09:00").slice(0, 5), title:a.title, kind:a.kind || "sight", dur:a.dur || 60, main:!!a.is_main, note:a.note || "", spots:a.spots || [], legacyId:a.id }); });
-  const days = Object.values(byDate).sort((x, y) => x.date.localeCompare(y.date)); days.forEach(d => { d.title = (d.items.find(i => i.main) || d.items[0] || {}).title || ""; });
-  const start = trip.start_date || (days[0] || {}).date, end = trip.end_date || (days[days.length - 1] || {}).date || start;
-  const cats = {}; cl.filter(c => !c.private || c.created_by === uid).forEach(c => (cats[c.category] = cats[c.category] || []).push(c)); const checklist = Object.entries(cats).map(([cat, L]) => ({ cat, items:L.map(c => c.label) }));
-  const packed = []; checklist.forEach((g, gi) => cats[g.cat].forEach((c, i) => { if(c.done) packed.push(gi + ":" + i); }));
-  const T = { name:trip.name, start, end, budget:+(mine.total_budget || trip.total_budget || 4000), currency:home, home, rate, cities:(trip.cities || []).map(n => G && G(n) ? G(n).id : null).filter(Boolean), days, prepaid:[], checklist, source:"legacy" };
-  const dIdx = date => Math.max(0, days.findIndex(d => d.date === date)), allIdx = [0, ...others.map((_, i) => i + 1)];
-  const exp = exps.sort((x, y) => (y.date || "").localeCompare(x.date || "")).map(e => { const c = LCAT[e.category] || LCAT.Other, payer = idx(e.payer_id || e.user_id), split = !e.shared ? [idx(e.user_id)] : (e.participants && e.participants.length ? e.participants.map(idx) : allIdx);
-    const base = { t:e.note || (e.category === "Pool" ? "交公费" : c[0]), c:c[0], ic:c[1], col:c[2], rm:+(e.amount_base || 0), cny: e.currency && e.currency !== home ? +e.amount : null, who:nm(e.payer_id || e.user_id), payer, split:[...new Set(split)].sort(), d:`${+String(e.date).slice(5, 7)}/${+String(e.date).slice(8, 10)}`, at:e.date, wasPre:!!e.prepaid, reviewed:true };
-    if((e.split_n || 0) > base.split.length) base.splitN = e.split_n; return base; });
-  const photoJobs = [], cut = []; const job = (path, set) => { if(path && photoJobs.length < 80) photoJobs.push([path, set]); };
-  const checkins = cks.filter(k => k.status !== "rejected").map(k => { const di = dIdx(k.date), ii = Math.max(0, (days[di] || { items:[] }).items.findIndex(it => it.title === k.name || it.legacyId === k.activity_id)), o = { di, ii, title:k.name, city:k.city || (days[di] || {}).city || "", date:k.date, at:String(k.created_at || "").slice(11, 16), photo:"", mood:0 }; job(k.photo_path, u => o.photo = u); return o; });
-  const album = shp.map(p => { const row = ["", idx(p.user_id), 0, p.caption || "", dIdx(p.date)]; job("trip:" + p.photo_path.replace(/^trip:/, ""), u => row[0] = u); return row; });
-  const wallet = fps.filter(f => f.user_id === uid).map((f, i) => { const w = { c: (G && G(f.city || "") ? G(f.city).id : (T.cities[0] || "c0")), f:f.food, r:"love", no:i + 1, d:String(f.date).replace(/-/g, "."), photo:"" }; job(f.photo_path, u => w.photo = u); return w; });
-  setStatus("off", `正在搬照片（${photoJobs.length} 张）…`);
-  for(let i = 0; i < photoJobs.length; i += 4) await Promise.all(photoJobs.slice(i, i + 4).map(async ([p, set]) => set(await copyPhoto(sb, trip, uid, p))));
-  const decisions = decs.map(d => ({ q:d.question, r: d.result === "heads" ? "正" : d.result === "tails" ? "反" : d.result, who:nm(d.user_id), at:d.date }));
-  const myj = jr.find(j => j.user_id === uid), diary = days.map((d, i) => ({ extra: i === days.length - 1 && myj ? myj.content : "", font:"" }));
-  return { T, st:{ album: album.filter(a => a[0]), cmts:{}, exp, checkins, decisions, games:{ bingo:{}, guess:{ round:null, history:[] } }, feed:[] }, pv:{ packed, wallet, stubs:[], diary, voices:[], liked:[] } }; }
 /* ---- weather from the Netlify function, when it is there ---- */
-async function weather(){ if(!C.weather || !DAYCFG[TODAY]) return; try{ const c = DAYCFG[TODAY]; const r = await fetch(`/api/weather?cc=CN&name=${encodeURIComponent(c.city)}`); if(!r.ok) return; const j = await r.json(); if(j && j.temp != null){ c.temp = Math.round(j.temp); if(j.text) c.desc = j.text; if(S.tab === "home") render(); } }catch(e){} }
+async function weather(){ const c = DAYCFG[TODAY]; if(!c || !c.city) return; try{
+    const g = (TRIP.guides || []).find(x => x.name === c.city) || (TRIP.guides || [])[0] || {}, CC = { 中国:"CN", 马来西亚:"MY", 泰国:"TH", 新加坡:"SG", 台湾:"TW", 香港:"HK", 澳门:"MO", 日本:"JP", 韩国:"KR", 越南:"VN", 新西兰:"NZ", 印度尼西亚:"ID" };
+    const city = (CITIES || []).find(x => x.name === c.city) || {}, ll = city.ll || g.ll || [], cc = CC[g.country] || "";
+    const r = await fetch(`/api/weather?cc=${cc}&name=${encodeURIComponent(c.city)}${ll.length ? `&lat=${ll[0]}&lng=${ll[1]}` : ""}`); if(!r.ok) return; const j = await r.json();
+    if(j && j.temp != null){ window.TD_WX = { city:c.city, date:TDATE(), temp:Math.round(j.temp), text:j.text || "" }; c.temp = Math.round(j.temp); if(j.text){ c.wx = j.text; c.desc = j.text; } window.TD_WX_AT = Date.now(); if(S.tab === "home" && !document.querySelector(".mo")){ NOSTAG = true; render(); } } }catch(e){} }
+setInterval(() => { if(!document.hidden) weather(); }, 30 * 60e3);
+document.addEventListener("visibilitychange", () => { if(!document.hidden && (!window.TD_WX_AT || Date.now() - window.TD_WX_AT > 30 * 60e3)) weather(); });
 
 (async () => { await loadLocal(); try{ await connect(); }catch(e){ console.warn("supabase", e); readyRes && readyRes(false); setStatus("err", "没连上数据库，先存在手机里：" + (e.message || e)); } weather(); })();

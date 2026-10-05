@@ -3,5 +3,6 @@
 export default async () => {
   const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "";
   const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
-  return new Response(JSON.stringify({ supabaseUrl: url, supabaseAnonKey: key }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  const vapid = process.env.VAPID_PUBLIC_KEY || process.env.VITE_VAPID_PUBLIC_KEY || "";
+  return new Response(JSON.stringify({ supabaseUrl: url, supabaseAnonKey: key, vapidPublicKey: vapid }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
 };
