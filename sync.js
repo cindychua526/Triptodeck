@@ -9,7 +9,6 @@ const st = { k:"off", t:"只存在这台手机（没有连数据库）" };
 let readyRes = null; window.TD_SYNC = { status: st, ready: new Promise(r => { readyRes = r; }) };
 function setStatus(k, t){ st.k = k; st.t = t; const el = document.getElementById("syncstat"); if(el){ el.textContent = t; const d = el.parentElement.querySelector(".syncdot"); d && (d.className = "syncdot " + k); } }
 const fill = (arr, v) => { if(Array.isArray(v)){ arr.length = 0; arr.push(...v); } };
-const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const clone = o => JSON.parse(JSON.stringify(o));
 const idb = { db:null, open(){ return this.db || (this.db = new Promise((res, rej) => { const r = indexedDB.open("td3", 1); r.onupgradeneeded = () => r.result.createObjectStore("blobs"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
   async put(k, b){ const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction("blobs", "readwrite"); t.objectStore("blobs").put(b, k); t.oncomplete = res; t.onerror = () => rej(t.error); }); },
@@ -20,8 +19,8 @@ const REF = {};            // blob url -> durable ref ("idb:key" or https url)
 const LIVE = {};           // durable "idb:key" -> blob url (for showing)
 const isBlob = u => typeof u === "string" && u.startsWith("blob:");
 function walk(v, fn, d = 0){ if(d > 14 || v == null) return v; if(typeof v === "string") return fn(v); if(Array.isArray(v)){ for(let i = 0; i < v.length; i++) v[i] = walk(v[i], fn, d + 1); return v; } if(typeof v === "object" && !(v instanceof Set)){ for(const k of Object.keys(v)) v[k] = walk(v[k], fn, d + 1); } return v; }
-const PUB = "/storage/v1/object/public/media/", SIGN = "/storage/v1/object/sign/media/";
-const sbPath = s => { if(typeof s !== "string") return null; if(s.startsWith("sb:media/")) return s.slice(9); let i = s.indexOf(PUB); if(i >= 0) return decodeURIComponent(s.slice(i + PUB.length).split("?")[0]); i = s.indexOf(SIGN); if(i >= 0) return decodeURIComponent(s.slice(i + SIGN.length).split("?")[0]); return null; };
+const SIGN = "/storage/v1/object/sign/media/";
+const sbPath = s => { if(typeof s !== "string") return null; if(s.startsWith("sb:media/")) return s.slice(9); const i = s.indexOf(SIGN); if(i >= 0) return decodeURIComponent(s.slice(i + SIGN.length).split("?")[0]); return null; };
 const toDurable = o => walk(clone(o), s => { if(isBlob(s)) return REF[s] || ""; if(typeof s === "string" && s.startsWith("http")){ const p = sbPath(s); if(p) return "sb:media/" + p; } return s; });
 /* photos are private to the room: turn stored refs (and old public links) into short-lived signed links */
 async function signAll(o){ if(!remote) return o; const paths = new Set(); walk(o, s => { const p = sbPath(s); if(p) paths.add(p); return s; });
@@ -35,15 +34,14 @@ async function storeBlob(url, room){ const blob = await (await fetch(url)).blob(
   if(remote && room){ const path = `${room}/${remote.uid}/${Date.now()}-${Math.random().toString(36).slice(2, 7)}.${ext}`; const r = await remote.sb.storage.from("media").upload(path, blob, { contentType: blob.type, upsert:false }); if(!r.error){ const ref = "sb:media/" + path; const sg = await remote.sb.storage.from("media").createSignedUrl(path, 604800); if(sg.data && sg.data.signedUrl){ LIVE[ref] = sg.data.signedUrl; REF[sg.data.signedUrl] = ref; } return ref; } }
   const key = `m-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; await idb.put(key, blob); LIVE["idb:" + key] = url; return "idb:" + key; }
 async function flushBlobs(obj, room){ const urls = new Set(); walk(obj, s => { if(isBlob(s) && !REF[s]) urls.add(s); return s; }); for(const u of urls){ try{ REF[u] = await storeBlob(u, room); }catch(e){} } }
-async function upgradeIdbRefs(book){ if(!remote || !book.room) return; const st = book.state; if(!st) return; const refs = new Set(); walk(st, s => { if(typeof s === "string" && s.startsWith("idb:")) refs.add(s); return s; }); }
 
 /* ---- the bookshelf as data ---- */
 const needsPush = (remoteB, merged) => { const k = x => JSON.stringify([(x.state && x.state.exp || []).map(e => e.id || e.t).sort(), (x.state && x.state.checkins || []).map(c => c.id || c.title).sort(), (x.state && x.state.album || []).map(a => a[0]).sort(), (x.state && x.state.del || []).slice().sort()]); return k(remoteB) !== k(merged); };
 window.TD_REF = u => REF[u] || u;
 const djb = s => { let h = 5381; for(let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0; return h.toString(36); };
 function serBook(b){ const o = { ...b }; delete o.cur; delete o._fresh; return toDurable(o); }
-function privData(){ return { found: S.found || [], suitcase: S.suitcase, pushOn: !!S.pushOn, privBy: S.privBy, me:S.me || "", avatar:S.avatar || "", keeps:S.keeps, tipsSeen: !!S.tipsSeen, fortune:S.fortune, secretDone:S.secretDone, stepsByDay:S.steps, sets:SETS }; }
-function applyPrivData(o){ if(!o) return; if(window.TD_SAFE) window.TD_SAFE(o); if(o.pushOn) S.pushOn = true; if(Array.isArray(o.found)) S.found = [...new Set([...(S.found || []), ...o.found])]; if(o.suitcase) S.suitcase = { ...(S.suitcase || {}), ...o.suitcase }; if(o.privBy) S.privBy = { ...(S.privBy || {}), ...o.privBy }; if(o.me && !S.me) S.me = o.me; if(o.avatar){ S.avatar = o.avatar; if(FRIENDS[0]) FRIENDS[0][2] = o.avatar; } if(o.keeps) S.keeps = o.keeps; if(o.tipsSeen) S.tipsSeen = true; if(o.fortune) S.fortune = o.fortune; if(o.secretDone) S.secretDone = o.secretDone; if(o.stepsByDay) S.steps = { ...(S.steps || {}), ...o.stepsByDay }; if(o.sets) Object.assign(SETS, o.sets); }
+function privData(){ return { scratch: S.scratch || null, saPos: S.saPos || {}, found: S.found || [], suitcase: S.suitcase, pushOn: !!S.pushOn, privBy: S.privBy, me:S.me || "", avatar:S.avatar || "", keeps:S.keeps, tipsSeen: !!S.tipsSeen, fortune:S.fortune, secretDone:S.secretDone, stepsByDay:S.steps, sets:SETS }; }
+function applyPrivData(o){ if(!o) return; if(window.TD_SAFE) window.TD_SAFE(o); if(o.pushOn) S.pushOn = true; if(Array.isArray(o.found)) S.found = [...new Set([...(S.found || []), ...o.found])]; if(o.saPos && typeof o.saPos === "object") S.saPos = { ...o.saPos, ...(S.saPos || {}) }; if(o.scratch && (!S.scratch || o.scratch.date >= S.scratch.date)) S.scratch = o.scratch; if(o.suitcase) S.suitcase = { ...(S.suitcase || {}), ...o.suitcase }; if(o.privBy) S.privBy = { ...(S.privBy || {}), ...o.privBy }; if(o.me && !S.me) S.me = o.me; if(o.avatar){ S.avatar = o.avatar; if(FRIENDS[0]) FRIENDS[0][2] = o.avatar; } if(o.keeps) S.keeps = o.keeps; if(o.tipsSeen) S.tipsSeen = true; if(o.fortune) S.fortune = o.fortune; if(o.secretDone) S.secretDone = o.secretDone; if(o.stepsByDay) S.steps = { ...(S.steps || {}), ...o.stepsByDay }; if(o.sets) Object.assign(SETS, o.sets); }
 /* merge a book from the room with the one on this phone: lists are combined, nothing a buddy added is lost */
 const keyOf = { album: r => "a:" + (Array.isArray(r) ? (REF[r[0]] || r[0]) : r), checkins: c => c.id || [c.title, c.date, c.at].join("|"), exp: e => e.id || [e.t, e.at, e.rm, e.who].join("|"), decisions: d => [d.q, d.at, d.who, d.r].join("|"), feed: f => [f.t, f.s].join("|") };
 function mergeList(a = [], b = [], key, del = []){ const out = [], seen = new Map(); const dead = new Set(del);
@@ -155,14 +153,12 @@ async function connect(){
       await fetch("/api/notify", { method:"POST", headers:{ "content-type":"application/json", Authorization:`Bearer ${session.access_token}` }, body: JSON.stringify({ trip_id: remote.trip.id, title, body, tag }) }); }catch(e){} } };
   window.TD_SYNC.onSwitch = b => enterBook(b);
   window.TD_SYNC.pull = async () => { stashCur(); await loadShelf(); const cb = BOOKS2.find(b => b.cur); if(cb){ await enterBook(cb); if(window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); } };
-  window.TD_SYNC.ensureRoom = async () => { await save(); return remote.trip; };
   readyRes && readyRes(true);
   let lastSeen = "";
   const poll = async () => { if(document.hidden || !remote || !remote.trip || saving) return; try{ const r = await sb.from("trip_state").select("state, updated_at, updated_by").eq("trip_id", remote.trip.id).maybeSingle();
       if(!r.data || r.data.updated_at === lastSeen) return; lastSeen = r.data.updated_at; if(r.data.updated_by === uid || !r.data.state || !r.data.state.book) return;
       const rb = await toLive(r.data.state.book); if(window.TD_SAFE) window.TD_SAFE(rb); stashCur(); const i = BOOKS2.findIndex(x => x.room === remote.trip.id); if(i < 0) return; const m = mergeBook(rb, BOOKS2[i]); BOOKS2[i] = m; if(needsPush(rb, m)){ pushedHash[m.id] = null; schedule(); } if(m.cur && window.TD_REFRESH_CUR) window.TD_REFRESH_CUR(); }catch(e){} };
   let pollT = 0; const tick = () => { clearTimeout(pollT); pollT = setTimeout(async () => { await poll(); tick(); }, ["guess", "bingo"].includes(window.CUR_PAGE) ? 3500 : 12000); }; tick();
-  window.TD_SYNC.pollNow = poll;
   stashCur(); for(let i = 0; i < BOOKS2.length; i++) BOOKS2[i] = await signAll(BOOKS2[i]); if(S.privBy) S.privBy = await signAll(S.privBy); await loadShelf();
   const cb = BOOKS2.find(b => b.id === S.curBook) || BOOKS2.find(b => b.trip);
   if(cb){ S.curBook = cb.id; bootTrip(); await enterBook(cb); } else { bootTrip(); setStatus("off", "已连上 · 还没有房间（开一本旅行书或输入旅伴的房间号）"); }

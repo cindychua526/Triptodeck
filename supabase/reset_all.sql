@@ -3,13 +3,15 @@
 -- 会删掉：所有旅行（房间）、旅伴名单、行程、账、打卡、相册、通知登记，
 --         还有旧版专用的所有表（activities、expenses、checkins……）。
 -- 会保留：每个人的名字和 8 位身份码（profiles）。
--- 删了就回不来。跑完这份，再跑一次 schema_v1.sql。
+-- 删了就回不来。跑完这份，再跑一次 schema_v1.sql。全新、空白的项目跑也没问题。
 -- 照片文件要另外在 Supabase → Storage 里删（下面有说明）。
 -- ============================================================================
 
 -- 1. 新版的房间和里面的内容全部清掉（成员、共享内容、私人内容会跟着一起删）
-delete from push_subs  where true;
-delete from trips      where true;
+do $$ begin
+  if to_regclass('public.push_subs') is not null then delete from public.push_subs where true; end if;
+  if to_regclass('public.trips')     is not null then delete from public.trips     where true; end if;
+end $$;
 
 -- 2. 旧版专用的表全部拿掉：public 里除了新版用的这 6 张，其他都删
 do $$

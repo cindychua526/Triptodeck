@@ -52,7 +52,7 @@ const CITIES = [];
 
 const RATE = { love:"好吃！", ok:"还行", meh:"不爱" };
 const FRIENDS = [["我","#E2B77A"]];
-const S = { tab:"home", day:TODAY, tday:TODAY, seg:"tix", acity:"xm", archOpen:false, diary:TODAY,
+const S = { tab:"home", day:TODAY, tday:TODAY, seg:"tix", diary:TODAY,
   packed:new Set(), wallet:[], checkins:[], decisions:[] };
 let PACK_TOTAL = CHECK.reduce((a, g) => a + g.items.length, 0);
 
@@ -72,7 +72,7 @@ function home(){
     ${past ? bubbles() : ""}
     <div class="htitle">${PHASE === "before" ? `<small style="display:block; font-size:13px; color:var(--amber); margin-bottom:6px; letter-spacing:.06em">还有 ${dayDiff(TDATE(), TRIP.start)} 天出发</small>` : PHASE === "after" ? `<small style="display:block; font-size:13px; color:var(--mu); margin-bottom:6px">这趟旅行已经结束</small>` : ""}<h1>${d.place}</h1><p>${d.city} · ${md(dd.date)} · ${wk(dd.date)}</p></div></div>
   <div class="stats"><button data-act="tab:money" aria-label="今天花了">${I("wallet",18)}<span class="cu">${HSYM()} ${Math.round(todaySpend())}</span><em>今天</em></button><i></i><button data-act="photos2" aria-label="照片">${I("camera",18)}<span class="cu">${d.pics}</span><em>张</em></button><i></i><button data-act="passport" aria-label="打卡">${I("pin",18)}<span class="cu">${okCheckins().filter(c => c.di === S.day).length}</span><em>打卡</em></button></div>
-  ${pendingHTML()}${tipsHTML()}${oocTile()}${fxBanner()}<div class="sec" style="margin-top:20px"><h2>这趟旅行<span>${DAYS.length} 天 · ${TRIP.cityNames}</span></h2></div>
+  ${pendingHTML()}${tipsHTML()}${scratchHTML()}${oocTile()}${fxBanner()}<div class="sec" style="margin-top:20px"><h2>这趟旅行<span>${DAYS.length} 天 · ${TRIP.cityNames}</span></h2></div>
   <div class="days">${DAYCFG.map((c, i) => `<button data-act="day:${i}" aria-label="第 ${i+1} 天 ${c.place}" ${i === S.day ? 'aria-current="date"' : ""} class="${i > TODAY ? "fut" : ""}"><img src="${P[c.photo]}" alt=""><span>D${pad(i+1)}</span></button>`).join("")}</div>
   <button class="capture" data-act="capture"><span class="mic">${I("camera",20,2)}</span><b>记录此刻</b><small>照片 · 笔记</small><span style="flex:1"></span>${I("arrow")}</button>
   <div class="tiles">
@@ -85,13 +85,14 @@ const KIND = { sight:["景点","pin"], food:["美食","bowl"], lodging:["住宿"
 const PHOTO_OF = t => /鼓浪屿|码头|海|沙坡尾|洛伽/.test(t) ? "sea" : /开元寺|天后宫|关岳庙|古寺|钟楼|南普陀|清水宫/.test(t) ? "pagoda" : /西街|中山|金鱼巷|五店市|梧林|古城|集美/.test(t) ? "lane" : /清源山/.test(t) ? "tea" : /海岸|红塔湾/.test(t) ? "beach" : /夜市|音乐广场|天泉/.test(t) ? "night" : null;
 function trip(){
   const dd = DAYS[S.tday], c = DAYCFG[S.tday], pk = S.packed.size;
-  return `<div class="ph"><div><h1>行程</h1><p>${TRIP.cityNames} · <button class="chip" data-act="dates" aria-label="改旅行日期" style="height:26px; font-size:12px; padding:0 10px">${TRIP.range} · 改日期</button></p></div><span style="display:flex; gap:6px"><button class="chip" data-act="tools">${I("grid",16)}工具</button><button class="chip" data-act="map">${I("pin",16)}地图</button></span></div>
-  ${fxBanner()}<div class="dchips">${DAYS.map((d, i) => `<button data-act="tday:${i}" ${i === S.tday ? 'aria-current="date"' : ""}><b>D${pad(i+1)}</b><small>${mdS(d.date)}</small></button>`).join("")}</div>
+  return `<div class="ph"><div style="min-width:0; flex:1"><h1>行程</h1><p class="ph-route">${DAYS.map(d => d.city).filter((c, i, a) => c && c !== a[i - 1]).map(escT).join(" → ")}</p></div><span style="display:flex; gap:6px; flex-shrink:0"><button class="chip" data-act="tools">${I("grid",16)}工具</button><button class="chip" data-act="map">${I("pin",16)}地图</button></span></div>
+  <div class="ph-chips"><button class="chip" data-act="dates" aria-label="改旅行日期">${TRIP.range} · ${DAYS.length} 天 · 改日期</button><button class="chip" data-act="addcity" aria-label="再加一个城市">＋ 加城市</button></div>
+  ${fxBanner()}<div class="dchips${new Set(DAYS.map(d => d.city)).size > 1 ? " multi" : ""}">${DAYS.map((d, i) => `<button data-act="tday:${i}" ${i === S.tday ? 'aria-current="date"' : ""} aria-label="D${pad(i+1)} ${escT(d.city || "")}" style="--cc:${(CITIES.find(c => c.name === d.city) || {}).color || "#8A8478"}"><b>D${pad(i+1)}</b><small>${mdS(d.date)}</small></button>`).join("")}</div>
   <button class="citycard" data-act="place:${S.tday}:${Math.max(0, dd.items.findIndex(i => i.kind === "sight"))}"><img src="${P[c.photo]}" alt=""><span class="scrim"></span>
     <span class="temp" ${c.temp === "—" ? 'style="display:none"' : ""}><b>${c.temp}°C</b><span><span>${c.city}</span><span>${c.wx}</span></span></span>
     <span class="t"><b>${c.city} · ${c.place}</b><small>第 ${S.tday+1} 天 · ${md(dd.date)} ${wk(dd.date)}</small></span></button>
   ${true ? `<button class="pack card" data-act="pack">${suitMini(pk / PACK_TOTAL)}<span style="flex:1"><b style="font-size:15px">我的行李清单 <span class="privtag">私人</span></b><span style="display:block; font-size:12px; color:var(--mu); margin-top:2px">${pk} / ${PACK_TOTAL} 件装好了 · 只有你看得到</span><span class="bar"><i style="width:${pk / PACK_TOTAL * 100}%"></i></span></span>${I("chev",18)}</button>` : ""}
-  <div class="sec" style="margin-top:20px"><h2>${dd.items.filter(i => i.kind !== "transit").length} 个安排<span>橙点 = 主要行程，技能不能动它</span></h2></div>
+  <div class="daycity-row"><button class="chip" data-act="daycity:${S.tday}" aria-label="换这一天的城市">${I("pin", 13)} D${pad(S.tday + 1)} 在 ${escT(dd.city || "")} · 换城市</button></div><div class="sec" style="margin-top:12px"><h2>${dd.items.filter(i => i.kind !== "transit").length} 个安排<span>橙点 = 主要行程，技能不能动它</span></h2></div>
   <div class="tl" data-day="${S.tday}">${tripItems(S.tday).map((it, ii) => {
     if(it.kind === "transit" && !it.main) return `<div class="tr">${I("bus",14)}${it.title}</div>`;
     const [lab, ic] = KIND[it.kind] || ["安排","pin"], ph = (it.kind === "sight" || it.kind === "food") && PHOTO_OF(it.title);
@@ -115,7 +116,7 @@ function frontTicket(w, tw, stampAnim){ const cc = cityById(w.c), f = FOODS[w.f]
 function stubCol(k){ return ({ sea:"#6A3A2E", tea:"#2E4A3A", night:"#2A3566", pagoda:"#6B3524", lane:"#6E2A22", beach:"#1F4B55" })[k]; }
 
 function vcard(k, zh, en, date, cap){ return `<div class="vcard" style="background:${stubCol(k)}"><div class="h"><small>TRAVEL MEMORY</small><b>${zh}</b><span><span>${en}</span><span>${date}</span></span></div><div class="ph2"><img src="${P[k]}" alt="${zh}"><span style="position:absolute; left:8px; bottom:8px; padding:5px 9px; border-radius:99px; background:rgba(10,12,16,.5); font-size:11px">${cap}</span></div></div>`; }
-const ARCH = {};
+
 function perf(w, h, r = 3.2, step = 9){ const nx = Math.max(1, Math.round(w/step)), ny = Math.max(1, Math.round(h/step)), sx = w/nx, sy = h/ny; let d = "M0 0";
   for(let i = 0; i < nx; i++){ const c = sx*(i+.5); d += `L${c-r} 0A${r} ${r} 0 0 0 ${c+r} 0`; } d += `L${w} 0`;
   for(let i = 0; i < ny; i++){ const c = sy*(i+.5); d += `L${w} ${c-r}A${r} ${r} 0 0 0 ${w} ${c+r}`; } d += `L${w} ${h}`;
@@ -127,28 +128,16 @@ function stampSVG(k, label, en, pm){ sid++; const w = 108, h = 138, m = 7;
     <image href="${P[k]}" x="${m}" y="${m}" width="${w-2*m}" height="${h-2*m-18}" preserveAspectRatio="xMidYMid slice" clip-path="url(#sc${sid})"/>
     <text x="${m}" y="${h-m-4}" font-family="-apple-system,PingFang SC,sans-serif" font-size="9" font-weight="700" fill="#2B2A28">${label}</text><text x="${w-m}" y="${h-m-4}" text-anchor="end" font-family="-apple-system, PingFang SC, Noto Sans SC, sans-serif" font-size="8" fill="#2B2A28">${en}</text>
     ${pm ? `<g opacity=".6" stroke="#2B2A28" fill="none" stroke-width="1.2"><circle cx="${w-16}" cy="22" r="16"/><circle cx="${w-16}" cy="22" r="12"/><path d="M${w-64} 16 q6-4 12 0 t12 0 t12 0M${w-64} 22 q6-4 12 0 t12 0 t12 0M${w-64} 28 q6-4 12 0 t12 0 t12 0"/></g><text x="${w-16}" y="25" text-anchor="middle" font-family="-apple-system, PingFang SC, Noto Sans SC, sans-serif" font-size="7" fill="#2B2A28" opacity=".75">${pm}</text>` : ""}</svg>`; }
-const FAN = [{x:-40,y:14,r:-7},{x:4,y:0,r:2},{x:48,y:12,r:-3},{x:94,y:2,r:6}];
-function layoutArch(){ const a = document.querySelector(".arch"); if(!a) return; a.querySelectorAll(".stp").forEach((s, i) => { const f = FAN[i];
-  s.style.transform = S.archOpen ? `translate(${f.x}px, ${f.y}px) rotate(${f.r}deg)` : `translate(-30px, 20px) rotate(0deg) scale(.8)`; s.style.transitionDelay = S.archOpen ? `${.15 + i*.07}s` : "0s"; }); }
+
 function book(){
   const seg = (k, l) => `<button role="tab" aria-selected="${S.seg === k}" data-act="seg:${k}">${l}</button>`;
   let body = "";
   if(S.seg === "tix"){
     body = `<div class="sec"><h2>美食票夹<span>${S.wallet.length} 张 · 撕一张就会放进来</span></h2></div>
       <div class="wallet">${S.wallet.length ? "" : emptyBox("还没有美食票", "玩法 → 撕一张美食票，吃到了就撕")}${S.wallet.map((w, i) => [w, i]).reverse().map(([w, i]) => `<button class="tkw" data-act="tkview:${i}" aria-label="放大看这张${w.f}票" style="border:0; background:none; padding:0; flex-shrink:0">${frontTicket(w, 270)}</button>`).join("")}<button class="card" data-act="tear" style="flex-shrink:0; width:120px; height:${Math.round(270*.42)}px; border-radius:12px; display:grid; place-items:center; color:var(--mu); font-size:13px">${I("plus",22)}<span>撕一张</span></button></div>
-      <div class="sec" style="margin-top:6px"><h2>照片票根<button class="chip on" data-act="stubnew" style="height:34px">${I("plus",14,2)}做一张</button></h2></div>${S.stubs.map((st, i) => `<div class="stubwrap" data-stub="${i}">${stubHTML(st, i === 0 && S.stubFresh)}<button class="stubdl" data-act="stubdl:${i}" aria-label="把这张票根存成图片">${I("plus",12,2)}存成图片</button></div>`).join("")}
+      <div class="sec" style="margin-top:6px"><h2>照片票根<span style="display:flex; gap:8px">${S.stubs.length ? `<button class="chip" data-act="postcard" style="height:34px">✉︎ 明信片</button>` : ""}<button class="chip on" data-act="stubnew" style="height:34px">${I("plus",14,2)}做一张</button></span></h2></div>${S.stubs.map((st, i) => `<div class="stubwrap${st.layout === "v" ? " v" : ""}" data-stub="${i}">${stubHTML(st, i === 0 && S.stubFresh)}${st.note ? `<span class="stubnote" aria-label="背面写了字">✎</span>` : ""}<button class="stubdl" data-act="stubdl:${i}" aria-label="把这张票根存成图片">${I("plus",12,2)}存成图片</button></div>`).join("")}
       ${S.stubs.length ? "" : emptyBox("还没有照片票根", "首页「记录此刻」传一张照片，勾上「做成票根」")}${keepsHTML()}`;
-  } else if(S.seg === "stamps"){
-    const A = ARCH[S.acity] || Object.values(ARCH)[0]; if(!A){ body = emptyBox("还没有邮票", "每打一次卡，就会多一枚邮票"); } else {
-    body = `<div class="arch ${S.archOpen ? "open" : ""}">
-      ${A.st.map(([k, l], i) => `<button class="stp" data-act="stview:${i}" aria-label="看「${l}」这枚邮票">${stampSVG(k, l, A.en, "")}</button>`).join("")}
-      <button class="cover" data-act="arch" aria-expanded="${S.archOpen}" style="background:${A.col}"><span class="blur1" style="left:40px; top:30px; width:90px; height:90px; background:${A.b1}"></span><span class="blur2" style="left:10px; top:90px; width:70px; height:70px; background:${A.b2}"></span>
-        <span class="ct"><b>${A.n} · 集章册</b><small>MINI ARCHIVE · ${A.en}</small><i></i><i style="margin-top:4px"></i></span></button>
-      <p style="position:absolute; left:0; right:0; bottom:0; margin:0; text-align:center; font-size:12px; color:var(--mu)">${A.have ? (S.archOpen ? "点封面合上" : "点一下打开") : "还没有盖章，去了再来"}</p></div>
-      <div class="dots3">${Object.entries(ARCH).map(([k, a]) => `<button data-act="acity:${k}" aria-pressed="${S.acity === k}"><i style="background:${a.col}"></i>${a.n}</button>`).join("")}</div>
-      <div class="sec"><div class="card" style="padding:16px; display:flex; gap:14px; align-items:center"><span style="width:54px; height:54px; border-radius:50%; border:2px solid var(--amber); color:var(--amber); display:grid; place-items:center; font-family:var(--serif); font-size:22px; flex-shrink:0">${A.n[0]}</span>
-        <span style="flex:1"><span style="display:flex; justify-content:space-between; font-size:14px"><b>${A.n}勋章</b><span style="color:var(--mu)">${A.have} / 5 枚</span></span><span style="display:block; height:6px; border-radius:3px; background:rgba(255,255,255,.1); margin:8px 0"><span style="display:block; height:100%; width:${A.have*20}%; border-radius:3px; background:var(--amber)"></span></span><small style="color:var(--mu); font-size:12px">${A.have >= 5 ? "已解锁金色勋章" : `再盖 ${5 - A.have} 枚，护照里多一枚金色勋章`}</small></span></div></div>`;
-  } } else if(S.seg === "cal"){
+  } else if(S.seg === "stamps"){ body = stampAlbumHTML(); } else if(S.seg === "cal"){
     const t0 = new Date(TRIP.start + "T12:00:00"), t1 = new Date(TRIP.end + "T12:00:00"), start = new Date(t0); start.setDate(t0.getDate() - t0.getDay()); const ncell = Math.ceil(((t1 - start) / 864e5 + 1) / 7) * 7, cells = [];
     for(let i = 0; i < ncell; i++){ const d = new Date(start); d.setDate(start.getDate() + i); const iso = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`, di = DAYS.findIndex(x => x.date === iso);
       if(di >= 0 && di <= TODAY){ const n = ALBUM.filter(x => x[4] === di).length; cells.push(`<button class="c" data-act="diaryday:${di}" aria-label="${md(iso)}的手账" style="border:0; padding:0"><span class="st" style="transform:rotate(${[-4,3,-2,4,-3][di % 5]}deg)"><img src="${P[DAYCFG[di].photo]}" alt=""></span>${n ? `<b>${n}</b>` : ""}</button>`); }
@@ -174,8 +163,8 @@ function diary(){
     <span class="washi" style="left:216px; top:18px; width:76px; transform:rotate(4deg)"></span>
     <div style="left:22px; top:172px; font-family:var(--hand); font-size:28px; color:#E0602F; transform:rotate(-4deg)">${D.tag}<svg width="130" height="10" viewBox="0 0 130 10" style="display:block"><path d="M2 6 Q65 0 128 5" stroke="#E0602F" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
     <div class="cap" style="left:26px; top:238px; transform:rotate(-6deg)"><div><b>${okCheckins().filter(k => k.di === S.diary).length}</b><small>打卡</small></div></div>
-    <div class="cap" style="left:122px; top:262px; transform:rotate(8deg)"><div><b>${c.temp}°</b><small>${c.wx.slice(0,2)}</small></div></div>
-    ${false ? `<div style="left:230px; top:300px; width:128px; transform:rotate(-2deg)"><div style="padding:14px 12px; background:#FBFAF6; border-radius:10px; box-shadow:0 10px 20px rgba(0,0,0,.14); display:flex; align-items:center; gap:10px"><button data-act="soon" aria-label="播放语音" style="width:38px; height:38px; border-radius:50%; border:0; background:#1F1E1B; color:#fff; display:grid; place-items:center; padding:0 0 0 2px"><svg width="14" height="14" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5-12-7.5Z" fill="#fff"/></svg></button><span style="display:flex; align-items:center; gap:3px">${vb}</span></div><span style="display:block; font-family:var(--hand); font-size:20px; margin:6px 0 0 16px">语音 · ${mmss(c.voice)}</span></div><span class="washi" style="left:262px; top:292px; width:56px; transform:rotate(-8deg)"></span>` : ""}
+    ${c.temp !== "—" && c.temp != null && c.temp !== "" ? `<div class="cap" style="left:122px; top:262px; transform:rotate(8deg)"><div><b>${c.temp}°</b><small>${String(c.wx || "").slice(0,2)}</small></div></div>` : ""}
+    ${false ? `<div style="left:230px; top:300px; width:128px; transform:rotate(-2deg)"><div style="padding:14px 12px; background:#FBFAF6; border-radius:10px; box-shadow:0 10px 20px rgba(0,0,0,.14); display:flex; align-items:center; gap:10px"><span style="display:flex; align-items:center; gap:3px">${vb}</span></div><span style="display:block; font-family:var(--hand); font-size:20px; margin:6px 0 0 16px">语音 · ${mmss(c.voice)}</span></div><span class="washi" style="left:262px; top:292px; width:56px; transform:rotate(-8deg)"></span>` : ""}
     <div style="left:222px; top:430px; height:38px; padding:0 14px; background:rgba(176,196,160,.9); display:flex; align-items:center; gap:6px; transform:rotate(-3deg)">${I("pin",16)}<span style="font-family:var(--hand); font-size:20px">${c.city} · ${c.place}</span></div>
     <article class="note" style="left:16px; top:380px; transform:rotate(-1.5deg)"><small>NOTE 01</small><p style="font-family:${fontOf(D.font || "hand")}">${D.note}${D.extra ? "<br>" + D.extra : ""}</p></article>
     <span class="washi" style="left:64px; top:370px; width:76px; transform:rotate(-3deg)"></span>
@@ -193,7 +182,7 @@ const VIEWS = { home, trip, play, book, money };
 /* ================= overlays ================= */
 let curOv = null;
 
-function openPlace(di, ii){ CK.di = di; CK.ii = ii;
+function openPlace(di, ii){ setTimeout(() => { const o = $("ov-place"); if(!o || o.querySelector(".itedit")) return; o.insertAdjacentHTML("beforeend", `<button class="chip itedit" data-act="itedit:${di}:${ii}" style="position:absolute; right:18px; top:calc(70px + env(safe-area-inset-top,0px)); z-index:5">${I("grid",14)} 改 / 删</button>`); }, 0); CK.di = di; CK.ii = ii;
   const it = DAYS[di].items[ii], c = DAYCFG[di], key = Object.keys(SPOTS).find(k => it.title.includes(k) || k.includes(it.title.replace(/ · .*/, ""))), sp = key && SPOTS[key];
   const ph = PHOTO_OF(it.title) || c.photo, past = ckDone(di, ii);
   const av = FRIENDS.map(([n, col], k) => `<span style="width:38px; height:38px; border-radius:50%; background:${col}; color:#0B0C10; font-weight:700; font-size:13px; display:grid; place-items:center; border:2px solid #0A0C0E; margin-left:${k ? -10 : 0}px">${n}</span>`).join("");
@@ -284,12 +273,13 @@ function resizeGL(){ if(!renderer) return; const cv = $("gl"), w = cv.clientWidt
 function setLen(v){ len = v; if(!stripGeo) return; fillStrip(stripGeo, 0, len, len); roll.rotation.y = (len - TAIL) / R; kick(); }
 function loop(){ if(!running) return; renderer.render(scene, camera); }
 function kick(){ if(!running || raf) return; raf = requestAnimationFrame(() => { raf = 0; loop(); }); }
-function startGL(){ if(!window.THREE){ $("thint").textContent = "3D 纸卷没有加载出来，请刷新页面再试"; return; } if(!renderer) initGL(); running = true; setTimeout(resizeGL, 60); resizeGL(); cancelAnimationFrame(raf); raf = 0; loop(); }
+function startGL(){ if(!window.THREE){ flatTear(); return; } if(!renderer) initGL(); running = true; setTimeout(resizeGL, 60); resizeGL(); cancelAnimationFrame(raf); raf = 0; loop(); }
 function stopGL(){ running = false; cancelAnimationFrame(raf); raf = 0; }
 function animLen(to, ms, done){ const from = len; tween(ms, t => setLen(from + (to - from) * ease(t)), done); }
-function pull(){ if(tstate !== "idle") return; tstate = "pulling"; $("thint").style.opacity = 0; renderTctl(); animLen(FULL, 1100, () => { tstate = "ready"; buzz(12); renderTctl(); }); }
+function pull(){ if(tstate !== "idle") return; tstate = "pulling"; $("thint").style.opacity = 0; renderTctl(); { const f = $("tflat"); if(f){ f.querySelector(".tf-food").textContent = tcity.food; f.querySelector(".tf-city").textContent = tcity.name; f.classList.add("out"); } } animLen(FULL, 1100, () => { tstate = "ready"; buzz(12); renderTctl(); }); }
 function tear(){
   if(tstate !== "ready") return; tstate = "tearing"; buzz([8, 30, 14]); renderTctl();
+  if(!window.THREE){ const f = $("tflat"); f && f.classList.add("torn"); setTimeout(() => { f && f.classList.remove("out", "torn"); showTres(); }, 750); return; }
   const g = new THREE.PlaneGeometry(1, 1, N, 1); fillStrip(g, len - L, len, len);
   const pivot = new THREE.Group(), cx = len - L/2, [, cz] = path(cx); pivot.position.set(cx, HT/2, cz); scene.add(pivot);
   const mat = strip.material.clone(); mat.transparent = true; const torn = new THREE.Mesh(g, mat); torn.position.set(-cx, -HT/2, -cz); pivot.add(torn); setLen(len - L);
@@ -299,9 +289,9 @@ function tear(){
 function curTicket(){ return { c: tcity.id, f: tcity.food, r: trating, no: serial, d: TDATE().replace(/-/g, ".") }; }
 function sizeFront(){ return Math.min(340, $("app").clientWidth - 40); }
 function showTres(){ tstate = "done"; trating = null; const fr = $("tfront"); fr.outerHTML = frontTicket(curTicket(), sizeFront()).replace('<div class="tk"', '<div class="tk flipin" id="tfront"');
-  $("trate").innerHTML = Object.entries(RATE).map(([k, v]) => `<button class="chip" aria-pressed="false" data-act="trate:${k}">${v}</button>`).join(""); $("tres").classList.add("on"); $("gl").style.opacity = .12; renderTctl(); bindTilt(); }
+  $("trate").innerHTML = Object.entries(RATE).map(([k, v]) => `<button class="chip" aria-pressed="false" data-act="trate:${k}">${v}</button>`).join(""); $("tres").classList.add("on"); $("gl").style.opacity = .12; { const tf = $("tflat"); tf && (tf.style.opacity = .12); } renderTctl(); bindTilt(); }
 function bindTilt(){ const f = $("tfront"); if(!f) return; f.onpointermove = e => { const r = f.getBoundingClientRect(), px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height; f.style.setProperty("--ry", ((px - .5) * 14) + "deg"); f.style.setProperty("--rx", ((.5 - py) * 12) + "deg"); f.style.setProperty("--gx", px*100 + "%"); f.style.setProperty("--gy", py*100 + "%"); }; f.onpointerleave = () => { f.style.setProperty("--rx", "0deg"); f.style.setProperty("--ry", "0deg"); }; }
-function tagain(){ $("tres").classList.remove("on"); $("gl").style.opacity = 1; serial++; tstate = "idle"; setLen(TAIL); $("thint").style.opacity = 1; renderTctl(); }
+function tagain(){ $("tres").classList.remove("on"); $("gl").style.opacity = 1; { const tf = $("tflat"); tf && (tf.style.opacity = 1); } serial++; tstate = "idle"; setLen(TAIL); $("thint").style.opacity = 1; renderTctl(); }
 function renderTctl(){ const a = `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 8h10M9 4l4 4-4 4"/></svg>`;
   $("tctl").innerHTML = tstate === "done" ? `<button class="tpill" data-act="tagain">再撕一张${a}</button><button class="tpill solid" data-act="tkeep">收进票夹</button>` : tstate === "ready" ? `<button class="tpill solid" data-act="ttear">撕下来${a}</button>` : `<button class="tpill" data-act="tpull" ${tstate !== "idle" ? "disabled" : ""}>拉出一张${a}</button>`; }
 function bindDrag(cv){ let x0 = null, l0 = 0;
@@ -312,7 +302,7 @@ function bindDrag(cv){ let x0 = null, l0 = 0;
 
 function setTcity(id){ tcity = cityById(id); renderTcities(); if(renderer){ drawTicket(stripTex.image, true); stripTex.needsUpdate = true; drawTicket(rollTex.image, false); rollTex.needsUpdate = true; capTex.image = capCanvas(); capTex.needsUpdate = true; kick(); }
   if(tstate === "done") tagain(); else { tstate = "idle"; animLen(TAIL, 300); renderTctl(); } }
-function openTear(){ if(!CITIES.length) return toast("这趟旅行还没有城市资料"); if(!tcity) tcity = CITIES[0]; openOv("ov-tear"); renderTcities(); renderTctl(); setTimeout(startGL, 30); }
+function openTear(){ setTimeout(() => { if(typeof renderTfoods === "function") renderTfoods(); }, 0); if(!CITIES.length) return toast("这趟旅行还没有城市资料"); tcity = todayCity() || tcity || CITIES[0]; openOv("ov-tear"); renderTcities(); renderTctl(); setTimeout(startGL, 30); }
 
 /* ================= 今日旅运 ================= */
 const FORTUNES = [
@@ -355,10 +345,10 @@ document.addEventListener("click", e => {
     case "day": setDay(+x); break;
     case "tday": setTday(+x); break;
     case "seg": S.seg = x; if(S.tab !== "book"){ S.tab = "book"; } render(); break;
-    case "acity": S.acity = x; S.archOpen = false; render(); break;
-    case "arch": if(!ARCH[S.acity].have){ toast("还没有盖章，去了再来"); break; } S.archOpen = !S.archOpen; b.closest(".arch").classList.toggle("open", S.archOpen); b.setAttribute("aria-expanded", S.archOpen); layoutArch(); b.parentElement.querySelector("p").textContent = S.archOpen ? "点封面合上" : "点一下打开"; buzz(8); break;
+    
+    
     case "diaryday": S.diary = +x; S.seg = "diary"; render(); break;
-    case "place": openPlace(+x, +y); { setTimeout(() => { const o = $("ov-place"); if(!o || o.querySelector(".itedit")) return; const [, di, ii] = b.dataset.act.split(":"); o.insertAdjacentHTML("beforeend", `<button class="chip itedit" data-act="itedit:${di}:${ii}" style="position:absolute; right:18px; top:calc(70px + env(safe-area-inset-top,0px)); z-index:5">${I("grid",14)} 改 / 删</button>`); }, 0); } break;
+    case "place": openPlace(+x, +y); break;
     case "checkin": openCheckin(); setTimeout(bindCkFile, 0); break;
     
     
@@ -410,21 +400,24 @@ const SETS = { sound:true, haptic:true, paper:true, buddy:true };
 /* ---------- 行程 extras: 地图 + 工具箱 ---------- */
 const GEO = [];
 let MAPB = { lat0:25.05, lng0:117.95, dlat:.7, dlng:.9 };
-function mapBounds(){ const P2 = GEO.length ? GEO : [["", 24.5, 118.1]]; const lats = P2.map(g => g[1]), lngs = P2.map(g => g[2]); let la0 = Math.min(...lats), la1 = Math.max(...lats), ln0 = Math.min(...lngs), ln1 = Math.max(...lngs); let dlat = Math.max(.08, (la1 - la0) * 1.4), dlng = Math.max(.1, (ln1 - ln0) * 1.4); if(dlng / dlat < 360 / 330 * 1.1) dlng = dlat * 360 / 330 * 1.1; else dlat = dlng * 330 / 360 / 1.1; MAPB = { lat0:(la0 + la1) / 2 + dlat / 2, lng0:(ln0 + ln1) / 2 - dlng / 2, dlat, dlng }; }
+function mapBounds(day){ const sel = day != null ? GEO.filter(g => (g[3] || []).includes(day)) : [], P2 = sel.length ? sel : GEO.length ? GEO : [["", 24.5, 118.1]]; const lats = P2.map(g => g[1]), lngs = P2.map(g => g[2]); let la0 = Math.min(...lats), la1 = Math.max(...lats), ln0 = Math.min(...lngs), ln1 = Math.max(...lngs); let dlat = Math.max(.025, (la1 - la0) * 1.5), dlng = Math.max(.03, (ln1 - ln0) * 1.5); if(dlng / dlat < 360 / 330 * 1.1) dlng = dlat * 360 / 330 * 1.1; else dlat = dlng * 330 / 360 / 1.1; MAPB = { lat0:(la0 + la1) / 2 + dlat / 2, lng0:(ln0 + ln1) / 2 - dlng / 2, dlat, dlng }; }
 const pj = (lat, lng) => [((lng - MAPB.lng0) / MAPB.dlng * 360).toFixed(1), ((MAPB.lat0 - lat) / MAPB.dlat * 330).toFixed(1)];
 const poly = pts => pts.map(([lng, lat]) => pj(lat, lng).join(",")).join(" ");
 const COAST = [[117.9,24.5],[117.98,24.53],[118.03,24.56],[118.06,24.61],[118.12,24.63],[118.18,24.6],[118.24,24.6],[118.3,24.63],[118.38,24.69],[118.44,24.7],[118.5,24.66],[118.58,24.63],[118.64,24.62],[118.7,24.64],[118.76,24.7],[118.76,24.76],[118.7,24.8],[118.66,24.86],[118.68,24.9],[118.74,24.93],[118.82,24.96],[118.9,25],[118.9,25.1],[117.9,25.1]];
 const XMI = [[118.065,24.435],[118.12,24.425],[118.19,24.45],[118.205,24.5],[118.17,24.555],[118.1,24.565],[118.066,24.52],[118.075,24.475]];
 let mapDay = TODAY;
-function openMap(){ mapBounds(); const FJ = TRIP.cities.length && TRIP.cities.every(c => ["xm","qz","zz","fz"].includes(c));
+function openMap(){ mapBounds(mapDay); const FJ = TRIP.cities.length && TRIP.cities.every(c => ["xm","qz","zz","fz"].includes(c));
   const route = DAYS.flatMap((d, di) => d.items.map(it => GEO.find(g => g[0] === it.title)).filter(Boolean)).map(g => pj(g[1], g[2]).join(",")).join(" ");
   const inDay = GEO.filter(g => g[3].includes(mapDay)).map(g => pj(g[1], g[2]).map(Number)); let vb = [0, 0, 360, 330];
   if(inDay.length){ const xs = inDay.map(p => p[0]), ys = inDay.map(p => p[1]); let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), w = Math.max(70, (x1 - x0) * 1.6), h = w * 330 / 360; if((y1 - y0) * 1.6 > h){ h = (y1 - y0) * 1.6; w = h * 360 / 330; } vb = [(x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h]; }
   const PS = vb[2] / 360; S.mapVB = vb;
   const grid = Array.from({length: 9}, (_, i) => `<path d="M${i*45} 0V330M0 ${i*41} H360" stroke="rgba(255,255,255,.035)"/>`).join("");
-  const placed = []; const pins = GEO.map(([n, lat, lng, ds], gi2) => { const [x, y] = pj(lat, lng), on = ds.includes(mapDay), td = ds.includes(TODAY), lab = on && !placed.some(([px, py]) => Math.abs(px - x) < 60 * PS && Math.abs(py - y) < 14 * PS); if(lab) placed.push([+x, +y]);
+  const placed = [], ORDER = mapOrder(mapDay); const pins = GEO.map(([n, lat, lng, ds], gi2) => { const [x, y] = pj(lat, lng), on = ds.includes(mapDay), td = ds.includes(TODAY), num = on ? ORDER[n] : 0;
+      const tw = n.length * 10.5 * PS, hit = (bx, by, bw) => placed.some(([px, py, pw]) => bx < px + pw && px < bx + bw && Math.abs(py - by) < 13 * PS);
+      let side = null; if(on){ for(const [sd, bx, by] of [["r", +x + 12 * PS, +y], ["l", +x - 12 * PS - tw, +y], ["b", +x - tw / 2, +y + 18 * PS], ["t", +x - tw / 2, +y - 18 * PS]]){ if(!hit(bx, by, tw)){ side = sd; placed.push([bx, by, tw]); break; } } if(!side) side = "r"; }
+      const lab = !!side, LX = { r:[12, 4, "start"], l:[-12, 4, "end"], b:[0, 22, "middle"], t:[0, -14, "middle"] }[side || "r"];
     return `<g transform="translate(${x} ${y}) scale(${PS.toFixed(3)})" data-act="pin:${gi2}" style="cursor:pointer" opacity="${on ? 1 : .45}"><g class="pinpop" style="animation-delay:${500 + gi2 * 70}ms"><circle r="16" fill="transparent"/>${td ? `<circle r="14" fill="none" stroke="#EE6A3C" stroke-width="1.5"><animate attributeName="r" values="7;18" dur="1.8s" repeatCount="4"/><animate attributeName="opacity" values=".9;0" dur="1.8s" repeatCount="4"/></circle>` : ""}
-      <circle r="${on ? 6 : 4}" fill="${on ? "#EE6A3C" : "#F5F4F0"}" stroke="#0C1620" stroke-width="2"/>${lab ? `<text x="9" y="4" font-size="10" font-family="-apple-system,PingFang SC,sans-serif" fill="#F5F4F0" font-weight="600">${n}</text>` : ""}</g></g>`; }).join("");
+      <circle r="${on ? 9 : 4}" fill="${on ? "#EE6A3C" : "#F5F4F0"}" stroke="#0C1620" stroke-width="2"/>${num ? `<text y="3.5" text-anchor="middle" font-size="10" font-weight="700" font-family="-apple-system,sans-serif" fill="#fff">${num}</text>` : ""}${lab ? `<text x="${LX[0]}" y="${LX[1]}" text-anchor="${LX[2]}" font-size="10" font-family="-apple-system,PingFang SC,sans-serif" fill="#F5F4F0" font-weight="600" paint-order="stroke" stroke="#0C1620" stroke-width="3">${n.replace(/ · .*/, "").slice(0, 8)}</text>` : ""}</g></g>`; }).join("");
   const dd = DAYS[mapDay], stops = dd.items.filter(i => i.kind === "sight" || i.kind === "food");
   page(`<div class="scr">${back("地图", `<button class="chip" data-act="tools">${I("grid",16)}工具</button>`)}
     <div class="dchips">${DAYS.map((d, i) => `<button data-act="mapday:${i}" ${i === mapDay ? 'aria-current="date"' : ""}><b>D${pad(i+1)}</b><small>${mdS(d.date)}</small></button>`).join("")}</div>
@@ -436,10 +429,10 @@ function openMap(){ mapBounds(); const FJ = TRIP.cities.length && TRIP.cities.ev
       ${CITIES.filter(c => c.ll).map(c => `<text x="${pj(c.ll[0] + .02, c.ll[1])[0]}" y="${pj(c.ll[0] + .02, c.ll[1])[1]}" font-size="${(11 * PS).toFixed(2)}" letter-spacing="${(4 * PS).toFixed(2)}" fill="rgba(245,244,240,.4)" font-family="-apple-system,PingFang SC,sans-serif">${c.name}</text>`).join("")}
       <text x="${(vb[0] + vb[2] - 34 * PS).toFixed(1)}" y="${(vb[1] + vb[3] - 12 * PS).toFixed(1)}" font-size="${(9 * PS).toFixed(2)}" fill="rgba(245,244,240,.35)" font-family="-apple-system, PingFang SC, Noto Sans SC, sans-serif">N ↑</text></svg></div>
     <div class="card mcard"><div style="display:flex; justify-content:space-between; align-items:center"><b style="font-size:15px">D${pad(mapDay+1)} · ${DAYCFG[mapDay].city} · ${stops.length} 个地方</b><button class="chip" data-act="tool:nav">导航</button></div>
-      ${stops.map(s => `<div class="li" style="padding:10px 0"><span style="font-size:12px; color:var(--mu); width:40px; font-variant-numeric:tabular-nums">${s.t}</span><span class="tx"><b style="font-size:14px">${s.title}</b></span></div>`).join("")}</div></div>`); }
+      ${(() => { const ORD = mapOrder(mapDay), numOf = t => { const g = GEO.find(g => g[0] === t || t.includes(g[0]) || g[0].includes(t.replace(/ · .*/, ""))); return g ? ORD[g[0]] : 0; }; return stops.map(s => { const n = numOf(s.title); return `<div class="li" style="padding:10px 0"><span style="font-size:12px; color:var(--mu); width:40px; font-variant-numeric:tabular-nums">${s.t}</span><span style="width:22px; height:22px; border-radius:50%; display:grid; place-items:center; font-size:11px; font-weight:700; flex-shrink:0; margin-right:10px; ${n ? "background:#EE6A3C; color:#fff" : "border:1px dashed rgba(255,255,255,.25); color:var(--mu)"}">${n || "·"}</span><span class="tx"><b style="font-size:14px">${s.title}</b>${n ? "" : `<small>还没有位置，地图上看不到</small>`}</span></div>`; }).join(""); })()}</div></div>`); }
 function openTools(){ const t = (k, ic, col, n, s, wide) => `<button class="tool ${wide ? "wide" : ""}" data-act="tool:${k}"><span class="ti" style="background:${col}22; color:${col}">${I(ic,22)}</span><span><b>${n}</b><small>${s}</small></span></button>`;
   page(`<div class="scr">${back("旅途工具箱")}<div class="pt2" style="padding-top:6px"><p>在街上最常用的几样</p></div><div class="tools">
-    ${t("driver","bus","#E8A864","给司机看","大字显示要去的地方", true)}${t("nav","route","#7FA7D6","一键导航","高德 · Apple · Google")}${t("fx","wallet","#A9B7A1","汇率换算","RM 和人民币")}${t("talk","mic","#C79BD8","当地话","点一下读给你听")}${t("sos","bell","#EE6A3C","紧急信息","电话和今晚住哪")}</div></div>`); }
+    ${t("driver","bus","#E8A864","给司机看","大字显示要去的地方", true)}${t("nav","route","#7FA7D6","一键导航", inChina() ? "高德 · Apple · Google" : "Google · Apple · Waze")}${t("fx","wallet","#A9B7A1","汇率换算", TRIP.dest && TRIP.dest !== TRIP.home ? `${HSYM()} 和${CUR_CN[TRIP.dest] || TRIP.dest}` : `当地也用${CUR_CN[TRIP.home] || TRIP.home}，不用换算`)}${t("talk","mic","#C79BD8","当地话","点一下读给你听")}${t("sos","bell","#EE6A3C","紧急信息","电话和今晚住哪")}</div></div>`); }
 let fx = { v:"", dir:"rm" };
 function fxSheet(){ const n = parseFloat(fx.v || "0"), out = fx.dir === "rm" ? n / RATE_CNY : n * RATE_CNY;
   sheet(`<h3>汇率换算</h3><p class="sub">1 ${TRIP.dest} ≈ ${HSYM()} ${RATE_CNY.toFixed(3)} · 设置里可以改</p>
@@ -452,8 +445,10 @@ function toolSheet(k){
   if(k === "driver") return driverSheet();
   if(k === "nav") return navSheet();
   if(k === "talk") return talkSheet();
-  if(k === "sos") return sheet(`<h3>紧急信息</h3><p class="sub">点号码直接拨打</p>${[["110","报警"],["120","急救"],["119","火警"],["122","交通事故"]].map(([n, t]) => `<div class="li"><span class="tx"><b style="font-size:22px; font-variant-numeric:tabular-nums">${n}</b><small>${t}</small></span><a class="chip" href="tel:${n}" style="text-decoration:none">拨打</a></div>`).join("")}
-    <div class="li"><span class="tx"><b>今晚住</b><small>陶野集民宿（泉州西街）</small></span><button class="chip" data-act="tool:driver">给司机看</button></div>`);
+  if(k === "sos"){ const country = sosCountry(), nums = SOS_NUM[country] || [["112", "紧急电话（大部分国家的手机都能打）"]], stay = tonightStay();
+    return sheet(`<h3>紧急信息</h3><p class="sub">${country || "当地"} · 点号码直接拨打</p>${nums.map(([n, t]) => `<div class="li"><span class="tx"><b style="font-size:22px; font-variant-numeric:tabular-nums">${n}</b><small>${t}</small></span><a class="chip sos-call" href="tel:${n.replace(/[^0-9+]/g, "")}" style="text-decoration:none">拨打</a></div>`).join("")}
+    <div class="li"><span class="tx"><b>今晚住</b><small>${stay ? stay.title : "行程里还没写今晚住哪，可以在行程里加一个「住宿」"}</small></span>${stay ? `<button class="chip" data-act="drv:${stay.title}">给司机看</button>` : ""}</div>
+    <p style="font-size:12px; color:var(--mu); margin:10px 0 0">号码按「${country || "国际通用"}」显示，出发前最好再确认一次。</p>`); }
 }
 
 /* ---------- 打卡 flow ---------- */
@@ -462,10 +457,10 @@ const CK = { di:0, ii:0, pic:0, step:"pick", t:0 };
 const CKPICS = () => ckPics();
 function renderCheckin(){
   const it = DAYS[CK.di].items[CK.ii], c = DAYCFG[CK.di], en = cityEn(c.city), pics = CKPICS();
-  if(CK.step === "pick") return sheet(`<h3>在「${it.title}」打卡</h3><p class="sub">拍一张照片，交给旅伴确认，就能盖进护照</p>
+  if(CK.step === "pick") return sheet(`<h3>在「${it.title}」打卡</h3><p class="sub">${others() ? "拍一张照片，交给旅伴确认，就能盖进护照" : "拍一张照片，盖进护照"}</p>
     <div class="ck-mission"><small>今天的小任务</small><p>在${it.title}拍一张合照，每个人都要比一个不一样的手势。</p></div>
     <div class="ck-pics">${pics.map((k, i) => `<button data-act="ckpic:${i}" aria-pressed="${i === CK.pic}" aria-label="选第 ${i+1} 张照片"><img src="${P[k] || k}" alt=""></button>`).join("")}<label style="display:grid; place-items:center; border:1.5px dashed rgba(255,255,255,.3); border-radius:14px; color:var(--mu); font-size:12px; min-height:80px; cursor:pointer">${I("camera",20)}拍一张<input type="file" accept="image/*" capture="environment" id="ckfile" style="position:absolute; width:1px; height:1px; opacity:0"></label></div>
-    <button class="cbtn" data-act="cksend">交给旅伴确认</button>`);
+    <button class="cbtn pressstamp" data-act="cksend"><i class="ink" aria-hidden="true"></i><span>${others() ? "按住盖章 · 交给旅伴确认" : "按住盖章"}</span></button>`);
   const stamp = `<svg class="inkstamp ${CK.step === "ok" ? "slam" : ""}" viewBox="0 0 160 160" aria-hidden="true">${sealSVG(it.title.slice(0,4), en, TDATE().replace(/-/g, "."), "#FFB08F").replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "")}</svg>`;
   sheet(`<h3>${CK.step === "ok" ? "盖章成功" : "等旅伴确认"}</h3><p class="sub">${CK.step === "ok" ? (NAMES.length > 1 ? `${NAMES[1]} 确认了你的打卡` : "盖好了") : NAMES.length > 1 ? `已经发给 ${NAMES.slice(1).join(" 和 ")} 了` : "没有旅伴时自己确认"}</p>
     <div class="ck-photo">${pics[CK.pic] ? `<img src="${P[pics[CK.pic]] || pics[CK.pic]}" alt="打卡照片">` : `<div style="height:100%; display:grid; place-items:center; color:var(--mu); font-size:13px">没有照片也能盖章</div>`}${stamp}</div>
@@ -477,7 +472,7 @@ function renderCheckin(){
 function play(){
   const m = (act, ic, col, n, s) => `<button class="mini" data-act="${act}"><span style="width:36px; height:36px; border-radius:12px; background:${col}22; color:${col}; display:grid; place-items:center">${I(ic,20)}</span><span><b>${n}</b><br><small>${s}</small></span></button>`;
   return `<div class="ph"><div><h1>玩法</h1><p>让旅行多一点意外</p></div></div>
-  <button class="feat wood" data-act="tear"><span style="position:absolute; right:-20px; top:26px; transform:rotate(-8deg)">${CITIES[0] && CITIES[0].food ? miniTicket(CITIES[0].id, CITIES[0].food, 240, 0) : ""}</span><b>撕一张美食票</b><small>吃到了就撕一张，收进票夹</small></button>
+  <button class="feat wood" data-act="tear"><span style="position:absolute; right:-20px; top:26px; transform:rotate(-8deg)">${todayCity() && todayCity().food ? miniTicket(todayCity().id, todayCity().food, 240, 0) : ""}</span><b>撕一张美食票</b><small>吃到了就撕一张，收进票夹</small></button>
   <button class="feat black" data-act="fortune"><span style="position:absolute; right:26px; top:14px; width:104px; height:146px; transform:rotate(6deg)">${SLEEVE}</span><b>今日旅运</b><small>从卡套里抽出今天的运气</small></button>
   <button class="feat photo" data-act="car"><img src="${P.pagoda}" alt=""><b>我走过的地方</b><small>用自己拍的照片，一张张翻</small></button>
   <div class="grid2" style="padding-bottom:10px">
@@ -486,14 +481,13 @@ function play(){
     ${m("guess","wallet","#A9B7A1","猜价格","付钱前大家先猜")}${m("coin","spark","#E8A864","旅途通宝","抛一下，交给运气")}</div>` + motionTiles();
 }
 /* skill deck */
-let SK = null;
 
 /* dice */
 const PIPS = { 1:[5], 2:[1,9], 3:[1,5,9], 4:[1,3,7,9], 5:[1,3,5,7,9], 6:[1,3,4,6,7,9] };
 const FACE = { 1:[0,0], 6:[0,180], 3:[0,-90], 4:[0,90], 2:[-90,0], 5:[90,0] };
 const FACEPOS = { 1:"translateZ(55px)", 6:"rotateY(180deg) translateZ(55px)", 3:"rotateY(90deg) translateZ(55px)", 4:"rotateY(-90deg) translateZ(55px)", 2:"rotateX(90deg) translateZ(55px)", 5:"rotateX(-90deg) translateZ(55px)" };
-const DMODE = { 挑战:["用闽南话点一次单","请旅伴吃一样你没吃过的东西","跟一位阿姨问路","下一顿饭只点你没听过的菜","找到一只猫并拍下来","今天剩下的照片都要竖着拍"],
-  谁来:["你","小林","Q","你","小林","Q"], 走多远:["1","2","3","4","5","6"] };
+const DMODE = { 挑战:["用当地话点一次单","请旅伴吃一样你没吃过的东西","跟一位阿姨问路","下一顿饭只点你没听过的菜","找到一只猫并拍下来","今天剩下的照片都要竖着拍"],
+  get 谁来(){ const L = NAMES.length ? NAMES.map((n, i) => i === 0 ? "你" : n) : ["你"]; return Array.from({ length:6 }, (_, i) => L[i % L.length]); }, 走多远:["1","2","3","4","5","6"] };
 let dmode = "挑战", drot = [-20, 30], dres = null;
 function openDice(){ page(`<div class="scr">${back("旅途骰子")}<div class="hs">${Object.keys(DMODE).map(k => `<button class="chip ${k === dmode ? "on" : ""}" data-act="dmode:${k}">${k}</button>`).join("")}</div>
   <div class="dscene"><div class="dwrap" id="dwrap"><div class="cube" id="cube" style="transform:rotateX(${drot[0]}deg) rotateY(${drot[1]}deg)">${[1,2,3,4,5,6].map(n => `<div class="f" style="transform:${FACEPOS[n]}">${Array.from({length:9}, (_, i) => PIPS[n].includes(i+1) ? `<i class="${n === 1 || n === 4 ? "red" : ""}"></i>` : "<span></span>").join("")}</div>`).join("")}</div><span class="dshadow"></span></div></div>
@@ -528,7 +522,7 @@ function keepsakeShelf(){
     ${o("paper","每日小报",`<span style="width:62px; height:74px; background:#EEE8DA; color:#1A1814; font-family:var(--serif); font-size:10px; padding:6px; text-align:center; border-radius:2px; transform:rotate(-4deg); line-height:1.2"><b style="font-size:13px; display:block; border-bottom:1px solid #1A1814">旅途小报</b><span style="display:block; height:4px; background:#1A1814; opacity:.25; margin:5px 0"></span><span style="display:block; height:26px; background:#8A8274"></span></span>`)}
     ${o("recap","回忆放映",`<span style="position:relative; width:64px; height:64px; border-radius:12px; overflow:hidden"><img src="${P.pagoda}" alt="" style="width:100%; height:100%; object-fit:cover"><span style="position:absolute; inset:0; display:grid; place-items:center; background:rgba(0,0,0,.25)"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M8 5v14l11-7-11-7Z" fill="#fff"/></svg></span></span>`)}
     ${o("receipt","旅行发票",`<span style="width:46px; height:78px; background:#F7F5EF; border-radius:2px; padding:6px 5px; display:flex; flex-direction:column; gap:4px; transform:rotate(5deg)">${[1,.6,.8,.5,.9].map(w => `<i style="display:block; height:3px; width:${w*100}%; background:#1B1A18; opacity:.5"></i>`).join("")}<i style="display:block; margin-top:auto; height:10px; background:repeating-linear-gradient(90deg,#1B1A18 0 1px,transparent 1px 3px)"></i></span>`)}
-    ${o("poster","海报",`<span style="position:relative; width:46px; height:80px; border-radius:3px; overflow:hidden; box-shadow:0 6px 12px rgba(0,0,0,.4)"><img src="${P.sea}" alt="" style="width:100%; height:100%; object-fit:cover"><b style="position:absolute; left:4px; bottom:6px; font-size:10px; line-height:1.1">厦门<br>泉州</b></span>`)}
+    ${o("poster","海报",`<span style="position:relative; width:46px; height:80px; border-radius:3px; overflow:hidden; box-shadow:0 6px 12px rgba(0,0,0,.4)"><img src="${P.sea}" alt="" style="width:100%; height:100%; object-fit:cover"><b style="position:absolute; left:4px; bottom:6px; font-size:10px; line-height:1.1">${(TRIP.cityNames || TRIP.name || "").split(" · ").slice(0, 2).join("<br>")}</b></span>`)}
   </div>`; }
 
 const ALBUM = [];
@@ -541,7 +535,7 @@ const liked = { has(i){ const r = ALBUM[i]; return !!r && (r[5] || []).includes(
 const CMTS = new Proxy({}, { get(t, k){ const i = +k; if(Number.isInteger(i) && ALBUM[i]) return ALBUM[i][8]; return t[k]; },
   set(t, k, v){ const i = +k; if(Number.isInteger(i) && ALBUM[i]){ ALBUM[i][8] = v; return true; } t[k] = v; return true; }, ownKeys(){ return []; }, deleteProperty(){ return true; } });
 function openAlbum(){ window.CUR_PAGE = "album";  page(`<div class="scr">${back("大家的相册", `<button class="chip" data-act="aup">${I("plus",16)}上传</button>`)}<div class="pt2" style="padding-top:0"><p>大家拍的都在这里 · 双击照片点赞</p></div>
-  ${ALBUM.length ? "" : emptyBox("相册还是空的", "右下角「上传照片」，或者首页「记录此刻」")}<div class="mas">${ALBUM.map(([k, a, n, cap], i) => `<figure data-dbl="${i}"><img loading="lazy" decoding="async" src="${P[k] || k}" alt="${cap}" style="height:${[210,160,240,180,200,150,220,170][i % 8]}px" data-act="aopen:${i}"><figcaption><span class="who" style="background:${(FRIENDS[a] || FRIENDS[0])[1]}">${(FRIENDS[a] || FRIENDS[0])[0]}</span><span style="text-shadow:0 1px 4px rgba(0,0,0,.6)">${cap}</span><button class="lk ${liked.has(i) ? "on" : ""}" data-act="alike:${i}" aria-pressed="${liked.has(i)}" aria-label="点赞">${I("heart",13,2)}${(ALBUM[i][5] || []).length}</button></figcaption></figure>`).join("")}</div></div>`); }
+  ${ALBUM.length ? "" : emptyBox("相册还是空的", "右上角「＋上传」，或者首页「记录此刻」")}<div class="mas">${ALBUM.map(([k, a, n, cap], i) => `<figure data-dbl="${i}"><img loading="lazy" decoding="async" src="${P[k] || k}" alt="${cap}" style="height:${[210,160,240,180,200,150,220,170][i % 8]}px" data-act="aopen:${i}"><figcaption><span class="who" style="background:${(FRIENDS[a] || FRIENDS[0])[1]}">${(FRIENDS[a] || FRIENDS[0])[0]}</span><span style="text-shadow:0 1px 4px rgba(0,0,0,.6)">${cap}</span><button class="lk ${liked.has(i) ? "on" : ""}" data-act="alike:${i}" aria-pressed="${liked.has(i)}" aria-label="点赞">${I("heart",13,2)}${(ALBUM[i][5] || []).length}</button></figcaption></figure>`).join("")}</div></div>`); }
 function likeBurst(i){ const f = document.querySelector(`[data-dbl="${i}"]`); if(!f) return; const b = document.createElement("span"); b.className = "burst"; b.innerHTML = `<svg viewBox="0 0 24 24" width="90" height="90"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" fill="#FF6B57"/></svg>`; f.appendChild(b); setTimeout(() => b.remove(), 800); }
 function albumSheet(i){ const [k, a, n, cap] = ALBUM[i], cs = CMTS[i] || [];
   sheet(`<div style="height:220px; border-radius:20px; overflow:hidden; margin-bottom:12px"><img src="${P[k] || k}" alt="${cap}" style="width:100%; height:100%; object-fit:cover"></div><h3>${cap}</h3><p class="sub">${NAMES[a] || "旅伴"} 拍的 · <button class="chip" data-act="likers:${i}" style="height:26px; font-size:12px">${(ALBUM[i][5] || []).length} 个赞 · 谁点的</button></p>
@@ -551,7 +545,7 @@ function albumSheet(i){ const [k, a, n, cap] = ALBUM[i], cs = CMTS[i] || [];
 const SLIDES = () => [
   { ph:dayPhoto(0), k:`TRIP DECK · ${TRIP.start.slice(0, 4)}`, b:TRIP.name, p:`${TRIP.rangeCN} · ${FRIENDS.length} 个人` },
   ...DIARY.map((d, i) => ({ ph:d.ph, k:`D${pad(i+1)} · ${DAYCFG[i].city}`, b:DAYCFG[i].place, p:d.note || d.extra || DAYS[i].title || "" })).filter((_, i) => i <= TODAY),
-  { nums:true }, { ph:"lane", k:"年度最会吃", b:"小林", p:"撕了 5 张美食票，4 张都打了「好吃！」" },
+  { nums:true }, ...(S.wallet.length ? [{ ph:"lane", k:"这趟最会吃", b:S.me || "你", p:`撕了 ${S.wallet.length} 张美食票${S.wallet.filter(w => w.r === "love").length ? `，${S.wallet.filter(w => w.r === "love").length} 张打了「好吃！」` : ""}` }] : []),
   { ph:"night", k:"THE END", b:"下一本，去哪儿？", p:"这趟旅行会一直留在书架上" } ];
 let ri = 0, rpause = false;
 function openRecap(){ ri = 0; const sl = SLIDES();
@@ -575,7 +569,7 @@ function openAddExp(){ AE = { v:"", cur: TRIP.dest && TRIP.dest !== TRIP.home ? 
 function renderAE(){ const n = parseFloat(AE.v || "0"), other = AE.cur === "cny" ? `≈ ${HSYM()} ${(n * RATE_CNY).toFixed(2)}` : `≈ ${DSYM()} ${(n / RATE_CNY).toFixed(2)}`, per = AE.split.size ? (AE.cur === "cny" ? n * RATE_CNY : n) / AE.split.size : 0;
   sheet(`<h3>记一笔</h3>${FRIENDS.length > 1 ? `<div class="aemode"><button data-act="aemode:shared" aria-pressed="${AE.mode !== "mine"}">一起的，大家分</button><button data-act="aemode:mine" aria-pressed="${AE.mode === "mine"}">我自己的</button></div>` : `<p style="font-size:12px; color:var(--mu); margin:-4px 0 8px">现在只有你，记的都算你自己的</p>`}<div class="amtbig">${AE.cur === "cny" ? DSYM() : HSYM()} ${AE.v || "0"}</div><div class="amt-sub">${other} · 每人 ${HSYM()} ${per.toFixed(2)} <button class="chip" data-act="aecur" style="height:28px; margin-left:6px; font-size:12px">换成${AE.cur === "cny" ? " " + TRIP.home : " " + DNAME()}</button></div>
     <div class="lbl">花在哪</div><div class="pick">${CATS.map((c, i) => `<button class="chip ${i === AE.cat ? "on" : ""}" data-act="aecat:${i}">${c[0]}</button>`).join("")}</div>
-    <div class="lbl">花在什么上</div><input class="dinput" id="aenote" placeholder="比如：门票、午饭" maxlength="20" value="${AE.note || ""}" style="margin-top:8px">${AE.cur === "cny" && TRIP.dest !== TRIP.home ? `<div class="lbl">实际扣了多少 ${TRIP.home}（刷卡、换汇，可不填）</div><input class="dinput" id="aereal" type="number" inputmode="decimal" placeholder="比如花了 ${DSYM()}10，扣了 ${HSYM()}8 就填 8" value="${AE.real || ""}" style="margin-top:8px">` : ""}<div class="lbl">谁付的</div><div class="pick">${FRIENDS.map(([n, c], i) => `<button class="avt" data-act="aewho:${i}" aria-pressed="${i === AE.who}" style="background:${c}" aria-label="${n}付的">${n}</button>`).join("")}</div>
+    <div class="lbl">花在什么上</div><input class="dinput" id="aenote" placeholder="比如：门票、午饭" maxlength="20" value="${AE.note || ""}" style="margin-top:8px">${AE.cur === "cny" && TRIP.dest !== TRIP.home && !(AE.real || AE.showReal) ? `<button class="chip" data-act="aeshowreal" style="margin-top:10px; height:32px; font-size:12px">刷卡扣的 ${TRIP.home} 不一样？点这里填</button>` : ""}${AE.cur === "cny" && TRIP.dest !== TRIP.home && (AE.real || AE.showReal) ? `<div class="lbl">实际扣了多少 ${TRIP.home}（刷卡、换汇，可不填）</div><input class="dinput" id="aereal" type="number" inputmode="decimal" placeholder="比如花了 ${DSYM()}10，扣了 ${HSYM()}8 就填 8" value="${AE.real || ""}" style="margin-top:8px">` : ""}<div class="lbl">谁付的</div><div class="pick">${FRIENDS.map(([n, c], i) => `<button class="avt" data-act="aewho:${i}" aria-pressed="${i === AE.who}" style="background:${c}" aria-label="${n}付的">${n}</button>`).join("")}</div>
     <div class="lbl">算谁的（点掉就不算他）</div><div class="pick">${FRIENDS.map(([n, c], i) => `<button class="avt" data-act="aesplit:${i}" aria-pressed="${AE.split.has(i)}" style="background:${c}" aria-label="算${n}的">${n}</button>`).join("")}</div>
     <div class="keys">${["1","2","3","4","5","6","7","8","9",".","0","⌫"].map(k => `<button data-act="aek:${k}">${k}</button>`).join("")}</div>
     <div style="margin-top:12px"><button class="cbtn" data-act="aesave" ${n > 0 && AE.split.size ? "" : "disabled"}>记下来</button></div>`); }
@@ -585,7 +579,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if(!b) return; const [a, x, y] = b.dataset.act.split(":");
   switch(a){
     case "feed": openFeed(); { stagger($("sheet").querySelectorAll(".li"), 55); } break;
-    case "feedok": FEED[+x].ok = true; toast("已确认 · 小林的章盖上了"); buzz(15); b.outerHTML = `<span class="okmark">${I("check",14,2.4)}已确认</span>`; break;
+    case "feedok": FEED[+x].ok = true; toast(`已确认 · ${FEED[+x].by || "旅伴"}的章盖上了`); buzz(15); b.outerHTML = `<span class="okmark">${I("check",14,2.4)}已确认</span>`; break;
     case "shelf": openShelf(); break;
     case "book": shelfPick(+x); break;
     
@@ -606,8 +600,8 @@ document.addEventListener("click", e => {
     case "ckkeep": addCheckin(); closeSheet(); break;
     case "skills": openSkills(); { document.querySelectorAll("#ov-x .ghostcard").forEach((g, i) => { g.style.animationDelay = i * 120 + "ms"; g.classList.add("deal"); }); { const c = $("scard"); c && c.animate([{ opacity:0, transform:"translateY(140px) rotate(-8deg)" }, { opacity:1, transform:"none" }], { duration:700, delay:260, easing:"cubic-bezier(.3,1.2,.4,1)", fill:"backwards" }); } } break;
     
-    case "suse": toast(`已发动 ${SK.key} · ${SK.name}，房间里的人都会收到`); buzz([10, 40, 20]); $("sctl").innerHTML = `<button class="cbtn ghost" disabled>今天已发动</button>`; { const c = $("scard"); if(c){ c.classList.add("used"); c.parentElement.insertAdjacentHTML("beforeend", `<span class="usedtag">已发动</span>`); } confetti(); break; } break;
-    case "skeep": toast("收好了，今天之内都可以发动"); break;
+    
+    
     
     case "dice": openDice(); setTimeout(enhanceDice, 30); break;
     case "dmode": dmode = x; dres = null; openDice(); setTimeout(enhanceDice, 30); break;
@@ -627,7 +621,7 @@ document.addEventListener("click", e => {
     
     case "passport": openPassport(false); break;
     
-    case "album": openAlbum(); { stagger(document.querySelectorAll("#ov-x .mas figure"), 60); } { setTimeout(() => { const o = $("ov-x"); if(o && !o.querySelector(".fab")) o.insertAdjacentHTML("beforeend", `<button class="fab" data-act="aup">${I("camera",20)}上传照片</button>`); }, 0); } break;
+    case "album": openAlbum(); { stagger(document.querySelectorAll("#ov-x .mas figure"), 60); }  break;
     case "alike": { const i = +x; liked.has(i) ? liked.delete(i) : (liked.add(i), likeBurst(i)); b.classList.toggle("on", liked.has(i)); b.setAttribute("aria-pressed", liked.has(i)); b.innerHTML = `${I("heart",13,2)}${(ALBUM[i][5] || []).length}`; buzz(6); break; }
     case "aopen": openViewer(+x); break;
     case "csend": { const inp = $("cmt"), t = inp && inp.value.trim(); if(!t) break; (CMTS[+x] = CMTS[+x] || []).push([0, t, S.me || "你"]); albumSheet(+x); snd("click"); break; }
@@ -662,7 +656,7 @@ function stagger(els, step = 42, max = 14){ if(REDUCE) return; [...els].forEach(
 function countUp(el){ const txt = el.textContent, m = txt.match(/\d[\d,]*\.?\d*/); if(!m || REDUCE) return; const raw = m[0], num = parseFloat(raw.replace(/,/g, "")), dec = (raw.split(".")[1] || "").length, comma = raw.includes(","), pre = txt.slice(0, m.index), post = txt.slice(m.index + raw.length);
   tween(900, t => { const v = num * ease(t); let s = dec ? v.toFixed(dec) : String(Math.round(v)); if(comma) s = Number(s).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec }); el.textContent = pre + s + post; }); }
 function renderTabs(){ $("tabbar").innerHTML = TABS.map(([k, ic, l]) => `<button data-act="tab:${k}" class="${S.tab === k && lastTab !== k ? "justnow" : ""}" ${S.tab === k ? 'aria-current="page"' : `aria-label="${l}"`}>${I(ic, 21, S.tab === k ? 2 : 1.8)}<span>${l}</span></button>`).join(""); lastTab = S.tab; }
-function render(){ const v = $("view"); v.onscroll = null; v.innerHTML = VIEWS[S.tab](); renderTabs(); if(S.tab === "book" && S.seg === "stamps") layoutArch(); after(v); }
+function render(){ const v = $("view"); v.onscroll = null; v.innerHTML = VIEWS[S.tab](); renderTabs(); if(S.tab === "book" && S.seg === "stamps") saLayout(); if(S.tab === "home") scratchBind(); after(v); }
 function after(v){
   const kids = [...v.children].filter(el => !el.classList.contains("hero") && !el.classList.contains("tl"));
   if(!NOSTAG) stagger(kids);
@@ -673,7 +667,7 @@ function after(v){
     if(S.seg === "tix"){ v.querySelectorAll(".wallet .tk").forEach(t => bindTiltEl(t, 14)); v.querySelectorAll(".stub, .vcard").forEach(el => el.onclick = () => flipSwap(el)); }
     if(S.seg === "cal") v.querySelectorAll(".calg .c").forEach((c, i) => c.style.animationDelay = (i * 16) + "ms");
     if(S.seg === "diary") setupDiary(v);
-    if(S.seg === "stamps") stagger(v.querySelectorAll(".dots3 button"), 60);
+    if(S.seg === "stamps") stagger(v.querySelectorAll(".sa-st"), 45);
   }
   if(S.tab === "money") v.querySelectorAll(".pbar i").forEach((b, i) => b.style.animationDelay = (200 + i * 90) + "ms");
   NOSTAG = false;
@@ -756,19 +750,9 @@ function confetti(){ if(REDUCE) return; const app = $("app"), W = app.clientWidt
 function flipSwap(el){ if(el._busy) return; el._busy = true; buzz(6);
   el.animate([{ transform:"perspective(900px) rotateY(0)" }, { transform:"perspective(900px) rotateY(90deg)" }], { duration:200, easing:"ease-in" }).onfinish = () => {
     let b = el.querySelector(":scope > .back"); if(b) b.remove(); else { b = document.createElement("div"); b.className = "back"; const cap = (el.querySelector(".p span, .ph2 span") || {}).textContent || "", ttl = (el.querySelector(".s b, .h b") || {}).textContent || "";
-      b.innerHTML = `<small>${ttl} · 背面</small><p>${cap}</p><small>小林、Q 同行 · 点一下翻回来</small>`; el.appendChild(b); }
+      b.innerHTML = `<small>${ttl} · 背面</small><p>${cap}</p><small>${NAMES.length > 1 ? NAMES.slice(1).join("、") + " 同行" : "一个人的旅行"} · 点一下翻回来</small>`; el.appendChild(b); }
     el.animate([{ transform:"perspective(900px) rotateY(-90deg)" }, { transform:"perspective(900px) rotateY(0)" }], { duration:340, easing:"cubic-bezier(.3,1.3,.4,1)" }).onfinish = () => el._busy = false; }; }
-S.snotes = {};
-function openStampView(i){ const A = ARCH[S.acity]; if(!A || !A.st[i]) return; const [k, l] = A.st[i], key = S.acity + i, note = S.snotes[key] || "";
-  const lines = (note || "还没有写，翻回来给这枚邮票留一句话。").match(/.{1,9}/g).slice(0, 5);
-  const backSVG = `<svg viewBox="0 0 108 138" aria-hidden="true"><path d="${perf(108,138)}" fill="#F4EFE4"/><g opacity=".55" stroke="#2B2A28" fill="none" stroke-width="1"><circle cx="82" cy="28" r="15"/><circle cx="82" cy="28" r="11"/><path d="M30 22 q6-4 12 0 t12 0M30 28 q6-4 12 0 t12 0M30 34 q6-4 12 0 t12 0"/></g>
-    <text x="82" y="31" text-anchor="middle" font-family="-apple-system, PingFang SC, Noto Sans SC, sans-serif" font-size="6" fill="#2B2A28">11.04</text>${lines.map((t, j) => `<text x="12" y="${62 + j * 13}" font-family="Long Cang,cursive" font-size="11" fill="#2B2A28">${t}</text>`).join("")}<text x="12" y="126" font-family="-apple-system, PingFang SC, Noto Sans SC, sans-serif" font-size="5.5" fill="#6B685F">${A.en} · ${l}</text></svg>`;
-  page(`<div class="scr">${back("")}<div style="display:flex; justify-content:center; margin-top:-30px"><span class="chip glass">${l}</span></div>
-    <div class="sv"><button class="svc" id="svc" data-act="svflip" aria-label="点一下翻面"><span class="sf">${stampSVG(k, l, A.en, "11.04")}</span><span class="sf sb">${backSVG}</span></button></div>
-    <p style="text-align:center; font-size:12px; color:var(--mu); margin:4px 0 0">点邮票翻面 · 按住轻轻倾斜</p>
-    <div class="sec"><div style="display:flex; gap:8px"><label for="svin" style="position:absolute; left:-9999px">给这枚邮票写一句</label><input id="svin" value="${note.replace(/"/g, "&quot;")}" placeholder="给这枚邮票写一句…" maxlength="40" style="flex:1; height:48px; border-radius:24px; border:1px solid var(--line); background:rgba(255,255,255,.06); color:var(--ink); padding:0 16px; font:inherit; font-size:15px"><button class="chip on" data-act="svsave:${i}" style="height:48px">写上</button></div></div></div>`, "#0B0C10");
-  const c = $("svc"); c.animate([{ opacity:0, transform:"translateY(40px) rotate(-6deg) scale(.8)" }, { opacity:1, transform:"none" }], { duration:600, easing:"cubic-bezier(.2,1.2,.3,1)" });
-  if(!REDUCE){ c.onpointermove = e => { const r = c.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - .5, py = (e.clientY - r.top) / r.height - .5; c.style.transition = "transform .08s"; c.style.transform = `${c.classList.contains("flip") ? "rotateY(180deg)" : ""} rotateY(${px * 22}deg) rotateX(${-py * 16}deg)`; }; c.onpointerleave = () => { c.style.transition = ""; c.style.transform = ""; }; } }
+
 const DUNDO = [];
 function setupDiary(v){ const p = v.querySelector(".paper"); if(!p) return; const pos = S.dpos && S.dpos[S.diary] || {};
   [...p.children].forEach((el, i) => { if(el.classList.contains("washi") || el.dataset.act) return; el.dataset.drag = i; const q = pos[i]; if(q) el.style.translate = `${q[0]}px ${q[1]}px`; });
@@ -809,9 +793,9 @@ document.addEventListener("click", e => {
     
     
     
-    case "stview": openStampView(+x); break;
-    case "svflip": { const c = $("svc"); c.style.transform = ""; c.classList.toggle("flip"); buzz(8); break; }
-    case "svsave": { const inp = $("svin"); S.snotes[S.acity + x] = inp.value.trim(); toast("写上了"); NOSTAG = true; openStampView(+x); setTimeout(() => { const c = $("svc"); c && c.classList.add("flip"); }, 120); break; }
+    
+    
+    
     case "dedit": diaryEdit(!$("view").querySelector(".paper.edit")); break;
     case "ddone": diaryEdit(false); toast("排好了"); break;
     case "dundo": { const u = DUNDO.pop(); if(!u) { toast("没有可以撤销的了"); break; } const [d, idx, st] = u; S.dpos[d][idx] = st; const el = $("view").querySelector(`.paper [data-drag="${idx}"]`); if(el){ el.style.transition = "translate .3s"; el.style.translate = `${st[0]}px ${st[1]}px`; setTimeout(() => el.style.transition = "", 320); } break; }
@@ -825,9 +809,9 @@ const O = window.ORIG || null;
 const snd = (k, ...a) => { try{ O && O.sfx && O.sfx[k] && O.sfx[k](...a); }catch(e){} };
 addEventListener("pointerdown", () => { try{ O && O.unlock && O.unlock(); }catch(e){} }, { once:true, capture:true });
 /* sound for everything you touch */
-const SND_OF = { tab:"tap", day:"tap", tday:"tap", seg:"tap", mapday:"tap", dmode:"tap", cq:"tap", ptpl:"tap", acity:"tap", aecat:"tap", aewho:"tap", aesplit:"tap", ckpic:"tap", diaryday:"paper",
-  arch:"paper", paper:"paper", receipt:"paper", passport:"paper", ppopen:"paper", poster:"paper", album:"paper", secret:"paper", envopen:"tear", stview:"paper", svflip:"flip", book:"paper", shelf:"paper",
-  ck:"click", bcell:"stamp", trate:"stamp", ckkeep:"stamp", cksend:"click", suse:"success", aesave:"success", tkeep:"success", greveal:"reveal", settle:"success", feedok:"stamp", alike:"click",
+const SND_OF = { tab:"tap", day:"tap", tday:"tap", seg:"tap", mapday:"tap", dmode:"tap",  ptpl:"tap", aecat:"tap", aewho:"tap", aesplit:"tap", ckpic:"tap", diaryday:"paper",
+  arch:"paper", paper:"paper", receipt:"paper", passport:"paper",  poster:"paper", album:"paper", secret:"paper", envopen:"tear",   book:"paper", shelf:"paper",
+  ck:"click", bcell:"stamp", trate:"stamp", ckkeep:"stamp", cksend:"click",  aesave:"success", tkeep:"success",  settle:"success", feedok:"stamp", alike:"click",
   ttear:"tear", tpull:"paper", fortune:"paper", close:"click", droll:"shuffle", rtear:"tear", rprint:"paper", sw:"click", map:"paper", tools:"tap", tool:"tap", fxk:"click", aek:"click" };
 document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if(!b) return; const a = b.dataset.act.split(":")[0]; if(SND_OF[a]) snd(SND_OF[a]); }, true);
 
@@ -851,14 +835,11 @@ function deckActHTML(){ const s = O.CARD[DK.card]; if(DK.used) return `<div clas
   return `<div class="dk-note"><b>${s.key} · ${s.name}</b><p>${s.effect}</p><p class="warn">今天不发动，明天会失控：${s.ooc}</p></div><div style="padding:14px 20px 0"><button class="cbtn" data-act="dkactivate" style="background:linear-gradient(135deg, ${s.accent}, #F5F4F0)">发动技能 · ACTIVATE</button></div>`; }
 function openSkills(){ window.CUR_PAGE = "skills";  if(!O) return toast("牌组没有加载出来");
   page(`<div class="scr" style="background:radial-gradient(120% 60% at 50% 18%, #1B1F30, #0B0C10 70%)">${back("")}
-    <div class="dk-title"><small>SKILL ACTIVATION · DAY 05 · 11/4 周三</small><h2>The Trip Deck</h2><p>神话里的守护者们，今天只会有一位来找你。</p></div>
+    <div class="dk-title"><small>SKILL ACTIVATION · DAY ${pad(TODAY + 1)} · ${md(DAYS[TODAY].date)} ${"日一二三四五六".split("").map(d => "周" + d)[new Date(DAYS[TODAY].date + "T12:00:00").getDay()]}</small><h2>The Trip Deck</h2><p>神话里的守护者们，今天只会有一位来找你。</p></div>
     <div class="dk-stage" id="dkStage">${DK.card ? `<div class="my-card" id="myCard">${cardHTML2(DK.card, { state: DK.used ? "done" : "mine", cls:"hero powered" })}</div><p class="o-hint"><b>${O.CARD[DK.card].myth}</b></p>` : oracleHTML()}</div>
     <div id="dkAct">${DK.card ? deckActHTML() : ""}</div>${oocTile()}<div class="sec"><button class="cbtn ghost" data-act="oocdemo">不发动会怎样？看看失控</button></div>
-    <div class="sec"><h2>今天的牌桌<span>点牌看看</span></h2><div class="seats">
-      <div class="seat" data-act="dkseat:9">${cardHTML2("9", { cls:"mini", state:"done" })}<b>小林</b><small>✓ 已发动</small></div>
-      <div class="seat"><div class="tc mini down"><div class="tc-in"><div class="tc-face tc-back">${O.CARD_BACK}</div></div></div><b>Q</b><small>已抽 · 未揭晓</small></div>
-      <div class="seat">${DK.card ? cardHTML2(DK.card, { cls:"mini", state: DK.used ? "done" : "" }) : `<div class="tc mini down" style="opacity:.35"><div class="tc-in"><div class="tc-face tc-back">${O.CARD_BACK}</div></div></div>`}<b>你</b><small>${DK.card ? (DK.used ? "✓ 已发动" : "未发动") : "还没抽"}</small></div></div></div></div>`, "#0B0C10");
-  wireDeck();  setTimeout(() => { const o = $("ov-x"); const h2 = o && [...o.querySelectorAll(".sec h2")].find(x => x.textContent.includes("今天的牌桌")); if(h2) h2.closest(".sec").outerHTML = deckTableHTML(); }, 0); }
+    ${deckTableHTML()}</div>`, "#0B0C10");
+  wireDeck();  }
 function wireDeck(){ const o = $("oracle"); if(o) holdToDraw(o); const mc = $("myCard"); if(mc){ const c = mc.querySelector(".tc"); mc.onclick = () => { c.classList.remove("poke"); void c.offsetWidth; c.classList.add("poke"); snd("tap"); buzz(6); }; cardTilt(mc, c); } }
 function cardTilt(wrap, card){ if(REDUCE) return; wrap.onpointermove = e => { const r = wrap.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; card.style.transform = `rotateY(${x * 18}deg) rotateX(${-y * 14}deg)`; card.style.setProperty("--fx", (50 + x * 90) + "%"); card.style.setProperty("--fy", (50 + y * 90) + "%"); }; wrap.onpointerleave = () => { card.style.transform = ""; }; }
 function holdToDraw(el){ const fg = $("oringFg"), C = 2 * Math.PI * 90; fg.style.strokeDasharray = C; fg.style.strokeDashoffset = C; let t0 = 0, raf = 0, holding = false, lastTick = 0; const DUR = 1700;
@@ -950,7 +931,7 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if(!b) return; const [a, x] = b.dataset.act.split(":");
   switch(a){
     case "dkactivate": activateCard(); break;
-    case "dkseat": { const k = x, s = O.CARD[k]; snd("flip"); sheet(`<div class="my-card" style="display:flex; justify-content:center; padding:6px 0 12px">${cardHTML2(k, { cls:"hero powered" })}</div><h3>${k} · ${s.name}</h3><p class="sub">${s.myth} · 小林发动了</p><p style="font-size:14px; line-height:1.6">${s.effect}</p><p style="font-size:12px; color:#FFB08F">失控：${s.ooc}</p>`); break; }
+    
     case "cmode": cmode = x; document.querySelectorAll('#ov-x [data-act^="cmode:"]').forEach(c => c.classList.toggle("on", c === b)); break;
     case "cagain": toss(1); break;
     case "ckeep": if(cpending){ CDEC.unshift({ q: cpending.q || "一个小决定", r: cpending.label, who:"你", at: TDATE() }); snd("success"); toast("决定已记下"); NOSTAG = true; openCoin(); } break;
@@ -972,7 +953,7 @@ const OOC_LINE = { K:"月镜没被照亮。嫦娥把昨天最后一道光，留�
 const chipK = k => { const s = O.CARD[k]; return `<span class="k" style="background:linear-gradient(160deg, ${s.bg}, ${s.bg2}); color:${s.accent}">${k}</span>`; };
 function setBanner(k, title, sub, until = 0, calm = false){ S.fx.banner = { k, title, sub, until, calm }; if(until) cdStart(); }
 function fxBanner(){ const b = S.fx.banner; if(!b || !O) return ""; if(b.until && b.until < Date.now()){ S.fx.banner = null; return ""; }
-  return `<div class="fxb ${b.calm ? "calm" : ""}" role="status">${chipK(b.k)}<span><b>${b.title}</b><small>${b.sub}</small></span>${b.until ? `<span class="cd" data-until="${b.until}"></span>` : ""}</div>`; }
+  return `<div class="fxb ${b.calm ? "calm" : ""}" role="status">${chipK(b.k)}<span><b>${b.title}</b><small>${escT(b.sub)}</small></span>${b.until ? `<span class="cd" data-until="${b.until}"></span>` : ""}</div>`; }
 let cdT = 0; function cdStart(){ if(!cdT) cdT = setInterval(cdTick, 1000); }
 function cdTick(){ const all = document.querySelectorAll(".fxb .cd"); if(!all.length && !(S.fx.banner && S.fx.banner.until)){ clearInterval(cdT); cdT = 0; return; } all.forEach(c => { const ms = +c.dataset.until - Date.now(); if(ms <= 0){ c.closest(".fxb").remove(); S.fx.banner = null; return; } c.textContent = `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)}`; }); }
 function oocTile(){ const k = S.oocPending; if(!k || !O) return ""; const s = O.CARD[k];
@@ -1006,7 +987,7 @@ const OOC_FX = {
   "7": () => shootRandom("7", "射日 · 失控"),
   "6": () => { startAtmos("rain"); setBanner("6", "催雨 · 失控", "雨会一直下到中午"); goHome(); },
   "5": () => { startAtmos("snow"); setBanner("5", "落雪 · 失控", "今天整天都在飘雪"); goHome(); },
-  "4": () => { S.fx.grey = true; document.body.classList.add("fx-grey"); setBanner("4", "借路 · 失控", "今天的章都是灰的，按住一枚两秒就能找回颜色"); closeOv(); S.tab = "book"; S.seg = "stamps"; S.archOpen = true; render(); },
+  "4": () => { S.fx.grey = true; document.body.classList.add("fx-grey"); setBanner("4", "借路 · 失控", "今天的章都是灰的，按住一枚两秒就能找回颜色"); closeOv(); S.tab = "book"; S.seg = "stamps"; render(); },
   K: () => OOC_FX.Q(), X: () => OOC_FX["9"]()
 };
 const ACT_FX = {
@@ -1125,8 +1106,8 @@ function afterShelf(){ const d = $("bdetail"); if(!d) return; d.querySelectorAll
 /* decorate */
 let DI = 0;
 function decoSheet(i){ DI = i; const b = BOOKS2[i], L = b.look;
-  sheet(`<h3>装饰这一本</h3><p class="sub">${b.t} · 只改这一本的封面和书脊</p><div class="decoprev" id="decoprev">${coverHTML(b, true)}</div>
-    ${b.cur ? `<button class="li" data-act="dates" style="width:100%; background:none; border-left:0; border-right:0; border-top:0; text-align:left"><span class="tx"><b>旅行日期</b><small>${TRIP.rangeCN} · ${DAYS.length} 天 · 点这里改</small></span>${I("chev",16)}</button>` : ""}<div class="lbl">书名</div><label for="dname" style="position:absolute; left:-9999px">书名</label><input class="dinput" id="dname" value="${b.t}" maxlength="6" style="margin-top:8px">
+  sheet(`<h3>装饰这一本</h3><p class="sub">${escT(b.t)} · 只改这一本的封面和书脊</p><div class="decoprev" id="decoprev">${coverHTML(b, true)}</div>
+    ${b.cur ? `<button class="li" data-act="dates" style="width:100%; background:none; border-left:0; border-right:0; border-top:0; text-align:left"><span class="tx"><b>旅行日期</b><small>${TRIP.rangeCN} · ${DAYS.length} 天 · 点这里改</small></span>${I("chev",16)}</button>` : ""}<div class="lbl">书名</div><label for="dname" style="position:absolute; left:-9999px">书名</label><input class="dinput" id="dname" value="${escT(b.t)}" maxlength="24" style="margin-top:8px">
     <div class="lbl">颜色</div><div class="swatches">${BCOL.map(([k, n, a, bb]) => `<button data-act="dcol:${k}" aria-label="${n}" aria-pressed="${L.c === k}" style="background:linear-gradient(135deg,${a},${bb})"></button>`).join("")}</div>
     <div class="lbl">花纹</div><div class="pick">${BPAT.map(([k, n]) => `<button class="chip ${L.p === k ? "on" : ""}" data-act="dpat:${k}">${n}</button>`).join("")}</div>
     <div class="lbl">小挂饰</div><div class="charms">${Object.keys(CHARM).map(k => `<button data-act="dchm:${k}" aria-pressed="${L.m === k}" aria-label="${CHARM_N[k]}">${k === "none" ? `<span style="font-size:11px; color:var(--mu)">不要</span>` : charmSVG(k)}</button>`).join("")}</div>
@@ -1138,7 +1119,7 @@ function decoSheet(i){ DI = i; const b = BOOKS2[i], L = b.look;
 function decoRefresh(){ const b = BOOKS2[DI], pv = $("decoprev"); if(pv){ pv.innerHTML = coverHTML(b, true); pv.firstElementChild.animate([{ scale:.94 }, { scale:1 }], { duration:300, easing:"cubic-bezier(.2,1.5,.4,1)" }); }
   const sc = document.querySelector("#ov-x .scr"), y = sc ? sc.scrollTop : 0; NOSTAG = true; openShelf(); const s2 = document.querySelector("#ov-x .scr"); s2 && (s2.scrollTop = y); snd("tap"); }
 /* new trip */
-const NT = { name:"", city:"东京", start:"2027-01-18", days:5, c:"rose" };
+const NT = { name:"", city:"东京", start:"", days:5, c:"rose" };
 
 /* settings with identity code */
 const SETS2 = SETS; let MYCODE = "K7Q2M9XA";
@@ -1148,8 +1129,8 @@ function openSettings(){ const sw = (k, t, s) => `<div class="li"><span class="t
       <small style="color:var(--mu); font-size:12px; line-height:1.5; display:block">换手机、删了 App 重装、清了浏览器数据，都会变成「新的人」。记下这个码，在新的那边输入，就能把自己找回来，所有打卡、照片、票根都在。</small>
       <div style="display:flex; gap:8px; margin-top:10px"><button class="chip on" data-act="idcopy">复制身份码</button></div>
       <div class="addrow"><label for="idin" style="position:absolute; left:-9999px">输入旧的身份码</label><input id="idin" placeholder="输入旧的身份码，找回自己" maxlength="9" autocapitalize="characters"><button class="chip" data-act="idback" style="height:46px">找回</button></div></div>
-    ${sw("sound","音效","撕票、盖章、翻牌的声音")}${sw("haptic","震动","手机轻轻震一下")}${sw("paper","晚上 8 点的小报提醒","今天的报纸印好了就告诉你")}${sw("buddy","旅伴打卡时通知我","需要你确认的时候")}
-    <div class="li"><span class="tx"><b>语言</b><small>切换后界面文字会全部换过来</small></span><span style="display:flex; gap:6px"><button class="chip on" data-act="soon">中文</button><button class="chip" data-act="soon">English</button></span></div>
+    ${sw("sound","音效","撕票、盖章、翻牌的声音")}${sw("haptic","震动","手机轻轻震一下")}
+    
     <div class="roomcard"><small style="color:var(--mu); font-size:12px">房间号（6 位，发给旅伴，他们输入就能进来）</small><div class="rc">${ROOM() || "还没有"}</div><div class="addrow"><input id="mjoinin" placeholder="加入别人的房间：输入 6 位房间号" maxlength="9" autocapitalize="characters"><button class="chip on" data-act="mjoin" style="height:46px; flex-shrink:0">加入</button></div></div><div class="li"><span class="tx"><b>邀请旅伴</b><small>把房间码发给朋友，他们就能加入这本手账</small></span><button class="chip" data-act="members">旅伴 · ${FRIENDS.length}</button></div>
     ${pushRowHTML()}<div class="li"><span class="tx"><b>我的名字</b><small>旅伴、护照和留言里显示的名字</small></span><button class="chip" data-act="namesheet">${S.me || "我"}</button></div><div class="li"><span class="tx"><b>我的头像</b><small>选一个可爱的，护照和旅伴里都会用</small></span><button data-act="avsheet:0" style="padding:0; border:0; background:none">${avHTML(0, 40)}</button></div><div class="li"><span class="tx"><b>货币与汇率</b><small>${TRIP.home} 记账 · 1 ${TRIP.dest} = ${RATE_CNY} ${TRIP.home}</small></span><button class="chip" data-act="currency">改</button></div>${syncRow()}<div class="li"><span class="tx"><b>安装到主屏幕</b><small>像 App 一样打开，没网也能看</small></span><button class="chip" data-act="install">安装</button></div><div class="li"><span class="tx"><b>清空这台手机的数据</b><small>删掉本机保存的一切，回到开始页（房间里别人的不受影响）</small></span><button class="chip" data-act="wipe" style="color:#FFB7A6">清空</button></div><div class="li"><span class="tx"><b>备份整趟手账</b><small>照片、票根和账本打包成一个文件，换手机时用</small></span><button class="chip" data-act="backup">备份</button></div><div class="li"><span class="tx"><b>从备份恢复</b><small>选之前存的备份文件</small></span><button class="chip" data-act="restore">恢复</button></div>`); }
 
@@ -1226,13 +1207,13 @@ function sampleColor(src){ return new Promise(res => { const im = new Image(); i
     r /= w; g /= w; b /= w; let k = 1; const lum = () => .2126 * r * k + .7152 * g * k + .0722 * b * k; const m = (r + g + b) / 3; r = m + (r - m) * 1.4; g = m + (g - m) * 1.4; b = m + (b - m) * 1.4; while(lum() > .19 && k > .1) k *= .94;
     const h = v => Math.max(0, Math.min(255, Math.round(v * k * 255))).toString(16).padStart(2, "0"); res("#" + h(r) + h(g) + h(b)); }catch(e){ res("#2E4A3A"); } }; im.onerror = () => res("#2E4A3A"); im.src = src; }); }
 function stubHTML(st, fresh){ const f = fontOf(st.font);
-  if(st.layout === "v") return `<div class="vrow"><div class="vcard solo ${fresh ? "stub newone" : ""}" style="background:${st.col}"><div class="h"><small>TRAVEL MEMORY</small><b>${st.zh}</b><span><span>${st.en}</span><span>${st.date}${st.no ? " · " + st.no : ""}</span></span></div><div class="ph2"><img src="${st.src}" alt="${st.zh}">${st.cap ? `<span style="position:absolute; left:8px; bottom:8px; padding:5px 10px; border-radius:99px; background:rgba(10,12,16,.5); font-size:13px; font-family:${f}">${st.cap}</span>` : ""}</div></div></div>`;
-  return `<div class="stub ${fresh ? "newone" : ""}"><div class="p"><img src="${st.src}" alt="${st.zh}">${st.cap ? `<span style="font-family:${f}; font-size:${st.font === "hand" || st.font === "brush" ? 17 : 13}px">${st.cap}</span>` : ""}</div><div class="s" style="background:${st.col}"><u aria-hidden="true">${st.en[0]}</u><div style="position:relative"><b style="font-size:${st.en.length > 7 ? 12 : 15}px">${st.en}</b><br><small>${st.date}</small></div><em style="position:relative">${st.no}</em></div><i class="perf"></i><i class="n1"></i><i class="n2"></i></div>`; }
-function smCurrent(){ return { src: SM.src || P.tea, col: SM.col || SM.auto, font: SM.font, cap: SM.cap.trim(), layout: SM.layout, en: SM.en, zh: SM.zh, date: TDATE().slice(0, 7).replace("-", " · "), no: "No." + String(S.stubs.length + 1).padStart(3, "0") }; }
-function smPreview(){ const p = $("smprev"); if(p) p.innerHTML = stubHTML(smCurrent()); }
+  if(st.layout === "v") return `<div class="vrow"><div class="vcard solo ${fresh ? "stub newone" : ""}${st.holo ? " holo" : ""}" style="background:${st.col}"><div class="h"><small>TRAVEL MEMORY</small><b>${st.zh}</b><span><span>${st.en}</span><span>${st.date}${st.no ? " · " + st.no : ""}</span></span></div><div class="ph2"><img src="${st.src}" alt="${st.zh}" style="${stubImgStyle(st)}">${st.pm ? `<span class="pm">${postmarkSVG(st)}</span>` : ""}${st.cap ? `<span style="position:absolute; left:8px; bottom:8px; padding:5px 10px; border-radius:99px; background:rgba(10,12,16,.5); font-size:13px; font-family:${f}">${st.cap}</span>` : ""}</div></div></div>`;
+  return `<div class="stub ${fresh ? "newone" : ""}${st.holo ? " holo" : ""}"><div class="p"><img src="${st.src}" alt="${st.zh}" style="${stubImgStyle(st)}">${st.pm ? `<span class="pm">${postmarkSVG(st)}</span>` : ""}${st.cap ? `<span style="font-family:${f}; font-size:${st.font === "hand" || st.font === "brush" ? 17 : 13}px">${st.cap}</span>` : ""}</div><div class="s" style="background:${st.col}"><u aria-hidden="true">${st.en[0]}</u><div style="position:relative"><b style="font-size:${st.en.length > 7 ? 12 : 15}px">${st.en}</b><br><small>${st.date}</small></div><em style="position:relative">${st.no}</em></div><i class="perf"></i><i class="n1"></i><i class="n2"></i></div>`; }
+function smCurrent(){ return { src: SM.src || P.tea, col: SM.col || SM.auto, font: SM.font, cap: SM.cap.trim(), layout: SM.layout, en: SM.en, zh: SM.zh, date: TDATE().slice(0, 7).replace("-", " · "), no: "No." + String(S.stubs.length + 1).padStart(3, "0"), crop: SM.crop ? { ...SM.crop } : null, fx: SM.fx || "none", pm: !!SM.pm, pmd: TDATE() }; }
+function smPreview(){ const p = $("smprev"); if(!p) return; const cur = SM.src || SM.k; if(SM._cropFor !== cur){ SM.crop = { x:50, y:50, z:1 }; SM._cropFor = cur; const zz = $("smzoom"); zz && (zz.value = 1); } p.innerHTML = stubHTML(smCurrent()); const box = p.querySelector(".p, .ph2"); box && cropBind(box, SM.crop); }
 async function smAuto(){ SM.auto = await sampleColor(SM.src || P.tea); if(!SM.col) smPreview(); const a = document.querySelector('#ov-x [data-act="smcol:auto"]'); a && (a.style.background = SM.auto); }
 function openStubMaker(){ if(!SM.en){ SM.en = cityEn(DAYCFG[S.day].city); SM.zh = DAYCFG[S.day].place; } const pics = ALBUM.map(a => a[0]).slice(0, 8), sw = (v, lab, bg) => `<button data-act="smcol:${v}" aria-label="${lab}" aria-pressed="${(SM.col || "auto") === v}" style="background:${bg}"></button>`;
-  page(`<div class="scr">${back("做一张票根")}<div class="smprev" id="smprev"></div>
+  page(`<div class="scr">${back("做一张票根")}<div class="smprev" id="smprev"></div><div class="smcrop"><span>${I("grid", 13)} 拖动照片调位置</span><input type="range" id="smzoom" min="1" max="3" step="0.01" value="${(SM.crop || {}).z || 1}" aria-label="放大缩小"><button class="chip" data-act="smreset">重置</button></div><div class="smfx">${Object.entries(STUB_FX).map(([k, [n]]) => `<button class="chip${(SM.fx || "none") === k ? " on" : ""}" data-act="smfx:${k}">${n}</button>`).join("")}<button class="chip${SM.pm ? " on" : ""}" data-act="smpm">✉︎ 盖邮戳</button></div>
     <div class="sec"><h2>照片<span>从相册选，或者上传一张</span></h2><div class="smpics">
       <label class="up" style="flex-shrink:0; width:64px; height:64px; border-radius:14px; background:rgba(255,255,255,.07); border:1.5px dashed rgba(255,255,255,.3); color:var(--mu); display:grid; place-items:center; font-size:11px; cursor:pointer">${I("plus",20)}<input type="file" accept="image/*" id="smfile" style="position:absolute; width:1px; height:1px; opacity:0" aria-label="上传照片"></label>
       ${pics.map((k, i) => `<button data-act="smpic:${i}" aria-pressed="${!SM.src && SM.k === k}" aria-label="选这张"><img src="${k}" alt=""></button>`).join("")}</div></div>
@@ -1276,7 +1257,7 @@ document.addEventListener("click", e => {
     case "smcol": SM.col = x === "auto" ? null : x; document.querySelectorAll('#ov-x [data-act^="smcol:"]').forEach(s => s.setAttribute("aria-pressed", s === b)); smPreview(); break;
     case "smlay": SM.layout = x; document.querySelectorAll('#ov-x [data-act^="smlay:"]').forEach(s => s.classList.toggle("on", s === b)); smPreview(); break;
     case "smcity": SM.en = x; document.querySelectorAll('#ov-x [data-act^="smcity:"]').forEach(s => s.classList.toggle("on", s === b)); smPreview(); break;
-    case "smsave": { S.stubs.unshift(smCurrent()); S.stubFresh = true; SM.cap = ""; closeOv(); S.tab = "book"; S.seg = "tix"; render(); S.stubFresh = false; setTimeout(() => { const st = $("view").querySelector(".stub.newone, .vcard.newone"); st && vcenter(st); }, 300); confetti(); snd("stamp"); toast("新的票根放进去了"); break; }
+    case "smsave": { const nst = smCurrent(); nst.holo = holoRoll(); S.stubs.unshift(nst); S.stubFresh = true; SM.cap = ""; closeOv(); S.tab = "book"; S.seg = "tix"; render(); S.stubFresh = false; setTimeout(() => { const st = $("view").querySelector(".stub.newone, .vcard.newone"); st && vcenter(st); }, 300); confetti(); snd("stamp"); toast("新的票根放进去了"); break; }
     case "tkview": { const i = +x; if(i < 0 || i >= S.wallet.length) break; NOSTAG = curOv === "ov-x"; openTicketView(i); break; }
     case "tkflip": { const f = $("tkflip"); f.classList.toggle("flip"); snd("flip"); buzz(8); break; }
     case "tkfont": { S.wallet[TV].font = x; document.querySelectorAll('#ov-x [data-act^="tkfont:"]').forEach(s => s.setAttribute("aria-pressed", s === b)); const n = document.querySelector("#tkflip .note"); if(n) n.style.fontFamily = fontOf(x); $("tkflip").classList.add("flip"); break; }
@@ -1295,14 +1276,14 @@ document.addEventListener("input", e => { if(e.target.id === "smcap"){ SM.cap = 
 function coverHTML(b){ return `<div style="height:190px; display:flex; justify-content:center; pointer-events:none"><div style="transform:scale(.66); transform-origin:top center">${abookHTML(b, false).replace('id="abook"', "").replace('data-act="bopen"', "").replace(/^<button/, "<div").replace(/<\/button>$/, "</div>")}</div></div>`; }
 /* ---------- the book, drawn like a small archive folder ---------- */
 function abookHTML(b, open){ const [, , a, bb] = colOf(b.look.c), s = bstatus(b), f = [b.ph, ...["sea","pagoda","lane","tea","night","beach"].filter(k => k !== b.ph)].slice(0, 3);
-  return `<button class="abook ${open ? "open" : ""} ${b.look.arch ? "arch" : ""}" id="abook" data-act="bopen" aria-expanded="${!!open}" aria-label="${b.t}，${s.t}，点一下${open ? "合上" : "打开"}" style="--a:${a}; --b:${bb}">
+  return `<button class="abook ${open ? "open" : ""} ${b.look.arch ? "arch" : ""}" id="abook" data-act="bopen" aria-expanded="${!!open}" aria-label="${escT(b.t)}，${s.t}，点一下${open ? "合上" : "打开"}" style="--a:${a}; --b:${bb}">
     <span class="slab"></span><span class="slab s2"></span>
     <span class="peekst" style="top:54px"><img src="${P[f[1]]}" alt=""></span><span class="peekst" style="top:128px; right:-18px"><img src="${P[f[2]]}" alt=""></span>
-    <span class="inner"><small>${s.t}</small><b>${b.t}</b></span>
+    <span class="inner"><small>${s.t}</small><b>${escT(b.t)}</b></span>
     ${f.map((k, i) => `<span class="fan f${i + 1}"><img src="${P[k]}" alt=""></span>`).join("")}
     <span class="cov"><img class="blur" src="${b.cover || P[b.ph]}" alt=""><span class="tint"></span><span class="pat pat-${b.look.p}"></span>${b.look.rib ? '<i class="rib"></i>' : ""}
       <span class="badge ${s.k === "soon" || s.k === "now" ? "go" : ""}">${s.k === "soon" ? `${s.n} 天后出发` : s.k === "now" ? `第 ${s.d} 天` : s.t}</span>${b.look.m !== "none" ? `<span class="chm">${charmSVG(b.look.m)}</span>` : ""}
-      <span class="t"><b>${b.t}</b><small>${b.sub} · ${b.start.slice(0, 4)}</small><i></i><i></i></span></span>
+      <span class="t"><b${b.t.length > 8 ? ' class="long"' : ""}>${escT(b.t)}</b><small>${escT(b.sub)} · ${b.start.slice(0, 4)}</small><i></i><i></i></span></span>
     ${b.look.pin ? '<i class="pinmark" aria-hidden="true"></i>' : ""}</button>`; }
 let bookOpen = false;
 function openShelf(){ const order = bookOrder(); if(!BOOKS2[shelfSel]) shelfSel = order[0] ? order[0][1] : 0; const b = BOOKS2[shelfSel];
@@ -1310,8 +1291,8 @@ function openShelf(){ const order = bookOrder(); if(!BOOKS2[shelfSel]) shelfSel 
   const s = bstatus(b);
   page(`<div class="scr">${back(`<span class="brand"><img src="${LOGO}" alt="">我的旅行书</span>`, `<button class="rbtn glass" data-act="settings" aria-label="设置">${I("grid",20)}</button>`)}
     <div class="astage" id="astage">${abookHTML(b, bookOpen)}</div>
-    <div class="adots" role="tablist" aria-label="切换旅行书">${order.map(([bk, i]) => { const [, , a, bb] = colOf(bk.look.c); return `<button role="tab" data-act="book:${i}" aria-pressed="${i === shelfSel}" aria-label="${bk.t}" style="background:linear-gradient(135deg,${a},${bb})"></button>`; }).join("")}<button class="plus" data-act="newtrip" aria-label="新的一本">${I("plus",16,2)}</button></div>
-    <p class="aname">${b.t} · ${s.t} · 左右滑换一本，点书打开</p>
+    <div class="adots" role="tablist" aria-label="切换旅行书">${order.map(([bk, i]) => { const [, , a, bb] = colOf(bk.look.c); return `<button role="tab" data-act="book:${i}" aria-pressed="${i === shelfSel}" aria-label="${escT(bk.t)}" style="background:linear-gradient(135deg,${a},${bb})"></button>`; }).join("")}<button class="plus" data-act="newtrip" aria-label="新的一本">${I("plus",16,2)}</button></div>
+    <p class="aname">${escT(b.t)} · ${s.t} · 左右滑换一本，点书打开</p>
     <div class="bdetail" id="bdetail" style="margin-top:14px"><div class="binfo">${countBlock(b)}<div class="bbtns"><button class="cbtn ghost" data-act="deco:${shelfSel}">装饰 / 删除</button><button class="cbtn" data-act="${b.cur ? "close" : s.k === "soon" ? "soonbook" : "oldbook"}">${b.cur ? "继续写" : b.trip ? "换到这一本" : s.k === "soon" ? "准备行程" : "翻开"}</button></div></div></div></div>`);
   afterShelf(); bindBookSwipe(); }
 function bindBookSwipe(){ const st = $("astage"); if(!st) return; let x0 = null, sw = false;
@@ -1323,7 +1304,7 @@ function shelfPick(i, dir){ if(i === shelfSel && $("abook")) return; const order
   const go = () => { shelfSel = i; if(!$("astage") || !$("ov-x").classList.contains("on")) return; NOSTAG = true; openShelf(); const nb = $("abook"); nb && !REDUCE && nb.animate([{ transform:`translateX(${dir * 120}px) rotate(${dir * 6}deg)`, opacity:0 }, { transform:"none", opacity:1 }], { duration:420, easing:"cubic-bezier(.3,1.1,.4,1)" }); };
   if(bk && !REDUCE) bk.animate([{ transform:"none", opacity:1 }, { transform:`translateX(${-dir * 120}px) rotate(${-dir * 6}deg)`, opacity:0 }], { duration:200, easing:"ease-in", fill:"forwards" }).onfinish = go; else go(); }
 /* ---------- delete a book (hold to confirm) ---------- */
-function deleteSheet(i){ const b = BOOKS2[i]; sheet(`<h3>删除「${b.t}」？</h3><p class="sub">${b.room ? "这一本有房间：删掉后你会离开这个房间，旅伴那边还在，以后用房间号还能再加入。" : "里面的照片、票根、日记和账本会一起删掉，不能恢复。"}</p>
+function deleteSheet(i){ const b = BOOKS2[i]; sheet(`<h3>删除「${escT(b.t)}」？</h3><p class="sub">${b.room ? "这一本有房间：删掉后你会离开这个房间，旅伴那边还在，以后用房间号还能再加入。" : "里面的照片、票根、日记和账本会一起删掉，不能恢复。"}</p>
   <p style="font-size:13px; color:var(--mu)">不想删也可以归档：书会放到最后，随时还能打开。</p>
   <div style="display:grid; gap:10px; margin-top:12px"><button class="cbtn ghost" data-act="archbook:${i}">改成归档</button><button class="cbtn holdbtn" id="holddel" data-i="${i}"><i></i><span style="position:relative">按住 1 秒删除</span></button></div>`);
   const h = $("holddel"), bar = h.querySelector("i"); let t0 = 0, raf = 0;
@@ -1351,7 +1332,7 @@ document.addEventListener("click", e => { const b = e.target.closest('[data-act^
 document.addEventListener("click", e => { const b = e.target.closest('[data-act="capwhereok"]'); if(!b || !CAP) return; const v = (($("capwherein") || {}).value || "").trim(); if(!v) return toast("写个地方"); CAP.where = v; $("capwhere").innerHTML = capWhereHTML(); const r = $("capwhererow"); r && r.remove(); });
 async function capSave(){ const c = CAP; if(!c) return; const where = c.where || "沿途风景", city = DAYCFG[S.day].city; if(!c.album && !c.stub) return toast("选一个要放的地方"); closeSheet();
   if(c.album){ const r = [c.src, 0, 0, c.cap || where, S.day]; r[9] = where; ALBUM.unshift(r); }
-  if(c.stub){ const col = await sampleColor(c.src); S.stubs.unshift({ src:c.src, col, font:c.font, cap:c.cap, layout:"h", en: cityEn(city), zh: where === "沿途风景" ? `${city} · 沿途` : where, date: TDATE().slice(0, 7).replace("-", " · "), no:"No." + String(S.stubs.length + 1).padStart(3, "0") }); }
+  if(c.stub){ const col = await sampleColor(c.src); S.stubs.unshift({ holo: holoRoll(), src:c.src, col, font:c.font, cap:c.cap, layout:"h", en: cityEn(city), zh: where === "沿途风景" ? `${city} · 沿途` : where, date: TDATE().slice(0, 7).replace("-", " · "), no:"No." + String(S.stubs.length + 1).padStart(3, "0") }); }
   DAYCFG[S.day].pics = (DAYCFG[S.day].pics || 0) + 1; snd("success"); confetti(); toast(c.album && c.stub ? "放进相册，也做成票根了" : c.album ? "放进大家的相册了" : "做成票根了"); CAP = null; if(S.tab === "home"){ NOSTAG = true; render(); } }
 function capNoteSheet(){ const D = DIARY[S.day] || DIARY[TODAY], f = D.font || "hand";
   sheet(`<h3>写几句</h3><p class="sub">写进 D${pad(S.day + 1)} 的日记，会出现在手账 · 日记和晚上的小报里</p><label for="capnt" style="position:absolute; left:-9999px">写几句</label>
@@ -1418,9 +1399,10 @@ async function joinRoom(raw){ const v = normCode(raw); if(v.length === 8) return
 const GUIDE = () => (O && O.GUIDES) || [];
 const gById = id => (O && O.GUIDE_BY_ID && O.GUIDE_BY_ID[id]) || null;
 NT.guide = "tokyo"; NT.q = "";
-function cityListHTML(){ const q = NT.q.trim().toLowerCase(), L = GUIDE().filter(g => !q || g.name.includes(q) || (g.en || "").toLowerCase().includes(q) || (g.country || "").includes(q));
+function cityListHTML(){ const nq = NT.q.trim(), custom = nq && !GUIDE().some(g => g.name === nq) ? `<button class="ntcustom" data-act="ntcustom"><b>＋ 就用「${escT(nq)}」</b><small>没有资料也没关系，那几天你自己排</small></button>` : ""; return custom + cityListInner(); }
+function cityListInner(){ const q = NT.q.trim().toLowerCase(), L = GUIDE().filter(g => !q || g.name.includes(q) || (g.en || "").toLowerCase().includes(q) || (g.country || "").includes(q));
   const by = {}; L.forEach(g => (by[g.country || "其他"] = by[g.country || "其他"] || []).push(g));
-  return Object.entries(by).map(([c, gs]) => `<div class="cg">${c}</div>${gs.map(g => `<button data-act="ntguide:${g.id}" aria-pressed="${NT.guide === g.id}"><i style="background:${g.color || "#888"}"></i>${g.name}<small>${g.en || ""} · ${g.spots.length} 个地方</small></button>`).join("")}`).join("") || `<div class="cg">没有这个城市，可以直接用名字建一本</div>`; }
+  return Object.entries(by).sort(([a], [b]) => (b === "马来西亚") - (a === "马来西亚")).map(([c, gs]) => `<div class="cg">${c}</div>${gs.map(g => `<button data-act="ntguide:${g.id}"><i style="background:${g.color || "#888"}"></i>${g.name}<small>${g.en || ""} · ${g.spots.length} 个地方</small></button>`).join("")}`).join(""); }
 
 /* an itinerary skeleton from the guide: 2–3 places a day, a local dish for lunch and dinner */
 function makePlan(g, days){ const spots = g.spots.slice(), foods = g.foods.slice(), per = Math.max(2, Math.min(3, Math.ceil(spots.length / days))), out = [];
@@ -1435,7 +1417,7 @@ let PD = 0;
 function openPlan(i){ const b = BOOKS2[i], g = gById(b.guide); if(!g) return toast("这本还没有现成的城市资料，先在行程里手动加");
   if(!b.plan) b.plan = makePlan(g, dayDiff(b.start, b.end) + 1); const plan = b.plan, exps = (O.EXPERIENCES || {})[g.id] || [], lore = (O.LORE || {})[g.id]; PD = Math.min(PD, plan.length - 1);
   const spotOf = n => g.spots.find(s => s.n === n), foodOf = n => g.foods.find(f => f.n === n.replace(/^.+ · /, ""));
-  page(`<div class="scr">${back(`${b.t} · 行程草稿`, `<button class="chip" data-act="planshuffle:${i}">换一版</button>`)}
+  page(`<div class="scr">${back(`${escT(b.t)} · 行程草稿`, `<button class="chip" data-act="planshuffle:${i}">换一版</button>`)}
     <div style="padding:0 20px"><p style="margin:0; font-size:14px; line-height:1.6; color:#D8D6CF">${g.intro || ""}</p><p style="margin:8px 0 0; font-size:12px; color:var(--mu)">${g.country} · ${g.name} ${g.en ? "· " + g.en : ""} · 出发还有 ${dayDiff(TODAY_ISO, b.start)} 天</p></div>
     <div class="dchips" style="margin-top:14px">${plan.map((_, d) => `<button data-act="planday:${d}" class="${d === PD ? "on" : ""}"><b>D${pad(d + 1)}</b><small>${addDays(b.start, d).slice(5).replace("-", "/")}</small></button>`).join("")}</div>
     <div class="sec"><h2>第 ${PD + 1} 天<span>${plan[PD].length} 个安排 · 可以在行程页里改</span></h2>
@@ -1450,7 +1432,7 @@ document.addEventListener("input", e => { if(e.target.id === "ntq"){ NT.q = e.ta
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if(!b) return; const [a, x] = b.dataset.act.split(":");
   switch(a){
-    case "ntguide": { NT.guide = x; const g = gById(x); NT.city = g ? g.name : NT.city; document.querySelectorAll('#citylist button').forEach(s => s.setAttribute("aria-pressed", s === b)); const n = $("ntname"); n && (n.placeholder = NT.city); snd("tap"); break; }
+    case "ntguide": { const g = gById(x); if(!g) break; if(NT.mode === "day"){ NT.dayCity = { id:g.id, name:g.name }; dcRefresh(); snd("tap"); break; } const L = NT.list || (NT.list = []); if(L.length && L[L.length - 1].id === g.id) L[L.length - 1].days++; else L.push({ id:g.id, name:g.name, days:2 }); NT.q = ""; ntRefresh(); snd("tap"); buzz(5); break; }
     
     
     case "planday": PD = +x; NOSTAG = true; openPlan(shelfSel); break;
@@ -1471,7 +1453,7 @@ function openDriver(title){ const L = navLinks(title), city = DAYCFG[TODAY].city
   $("app").appendChild(el); try{ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); }catch(e){} }
 function placesForTools(){ let L = DAYS[TODAY].items.filter(i => i.kind === "sight" || i.kind === "food" || i.kind === "lodging"); if(!L.length) L = DAYS.flatMap(d => d.items).filter(i => i.kind === "sight").slice(0, 12); return L; }
 function navSheet(){ if(S.fx.lost > Date.now()) return toast("虚假世界：导航暂时关掉了"); const sights = placesForTools();
-  sheet(`<h3>一键导航</h3><p class="sub">选一个地方，用你手机里的地图打开</p>${sights.map(i => { const L = navLinks(i.title); return `<div class="li"><span class="tx"><b>${i.title}</b><small>${i.t} · ${i.dur}</small></span><span style="display:flex; gap:6px"><a class="chip" href="${L.amap}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">高德</a><a class="chip" href="${L.apple}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">Apple</a><a class="chip" href="${L.google}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">Google</a></span></div>`; }).join("")}`); }
+  sheet(`<h3>一键导航</h3><p class="sub">选一个地方，用你手机里的地图打开</p>${sights.map(i => { const L = navLinks(i.title); return `<div class="li"><span class="tx"><b>${i.title}</b><small>${i.t} · ${i.dur}</small></span><span style="display:flex; gap:6px">${inChina() ? `<a class="chip" href="${L.amap}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">高德</a>` : `<a class="chip" href="https://waze.com/ul?q=${encodeURIComponent(i.title.replace(/ · .*/, ""))}&navigate=yes" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">Waze</a>`}<a class="chip" href="${L.apple}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">Apple</a><a class="chip" href="${L.google}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center">Google</a></span></div>`; }).join("")}`); }
 function driverSheet(){ const sights = placesForTools();
   sheet(`<h3>给司机看</h3><p class="sub">选一个地方，屏幕会变成一张大字卡，直接给司机看</p><div class="pick">${sights.map(i => `<button class="chip" data-act="drv:${i.title}">${i.title}</button>`).join("")}</div>`); }
 document.addEventListener("click", e => {
@@ -1481,11 +1463,8 @@ document.addEventListener("click", e => {
     case "drvclose": { const d = $("drv"); d && d.remove(); try{ document.exitFullscreen && document.fullscreenElement && document.exitFullscreen(); }catch(err){} break; }
     case "soon": {
       const lab = b.getAttribute("aria-label") || b.textContent.trim();
-      if(lab === "播放语音"){ const v = VOICES.filter(v => v.day === S.diary && v.url).pop(); if(!v) toast(DAYCFG[S.diary].voice ? "示例的语音没有音频，你自己录的会在这里播" : "这一天还没有录语音，首页「记录此刻」可以录"); else { new Audio(v.url).play(); toast("播放中"); } }
-      else if(lab === "添加照片、笔记或贴纸"){ S.day = S.diary; captureSheet(); }
+      if(lab === "添加照片、笔记或贴纸"){ S.day = S.diary; captureSheet(); }
       else if(lab === "收藏"){ const key = (CK.di || 0) + ":" + (CK.ii || 0); S.favs.has(key) ? S.favs.delete(key) : S.favs.add(key); b.style.color = S.favs.has(key) ? "#FF8A6B" : ""; b.querySelector("svg") && (b.querySelector("svg").style.fill = S.favs.has(key) ? "currentColor" : "none"); toast(S.favs.has(key) ? "收藏了，会出现在回忆放映里" : "取消收藏"); buzz(8); }
-      else if(lab === "English"){ toast("英文界面下一版再来"); }
-      else if(lab === "中文"){ }
       break; }
   }
 });
@@ -1509,9 +1488,9 @@ const cityById = id => CITIES.find(c => c.id === id) || (() => { const g = O && 
 /* ---- deleting the book you're using moves you to another one, or back to the start page ---- */
 function doDelete(i){ const b = BOOKS2[i]; if(!b) return; if(b.room && window.TD_SYNC && window.TD_SYNC.leave) window.TD_SYNC.leave(b.room); closeSheet(); buzz([20, 40, 60]); snd("tear"); const bk = $("abook"); bk && bk.classList.add("gone"); const wasCur = b.cur || b.id === S.curBook;
   setTimeout(() => { BOOKS2.splice(i, 1); delete S.privBy[b.id]; bookOpen = false;
-    if(wasCur){ S.curBook = null; const next = BOOKS2.find(x => x.trip); if(next){ useBook(next.id); toast(`「${b.t}」删掉了，现在是「${next.t}」`); return; }
-      DAYS.length = 0; ALBUM.length = 0; EXP.length = 0; S.checkins.length = 0; closeOv(); $("view").innerHTML = ""; openStart(false); toast(`「${b.t}」删掉了`); return; }
-    const o = bookOrder(); shelfSel = o[0] ? o[0][1] : 0; NOSTAG = true; openShelf(); toast(`「${b.t}」删掉了`); }, 650); }
+    if(wasCur){ S.curBook = null; const next = BOOKS2.find(x => x.trip); if(next){ useBook(next.id); toast(`「${escT(b.t)}」删掉了，现在是「${next.t}」`); return; }
+      DAYS.length = 0; ALBUM.length = 0; EXP.length = 0; S.checkins.length = 0; closeOv(); $("view").innerHTML = ""; openStart(false); toast(`「${escT(b.t)}」删掉了`); return; }
+    const o = bookOrder(); shelfSel = o[0] ? o[0][1] : 0; NOSTAG = true; openShelf(); toast(`「${escT(b.t)}」删掉了`); }, 650); }
 
 document.addEventListener("click", e => { const b = e.target.closest('[data-act="expall"]'); if(b){ S.expAll = true; NOSTAG = true; render(); } });
 
@@ -1538,7 +1517,7 @@ function applyTrip(T){ if(window.TD_SAFE) window.TD_SAFE(T);
   if(!CITIES.length) cityNames.forEach((n, i) => CITIES.push({ id:"c" + i, name:n, en:n, color:["#2f6c9f","#a8352e","#b9822a"][i % 3], food:"" }));
   Object.keys(FOODS).forEach(k => delete FOODS[k]); Object.keys(FOOD_WHERE).forEach(k => delete FOOD_WHERE[k]); GITEMS.length = 0;
   gs.forEach(g => g.foods.forEach(f => { FOODS[f.n] = { en:f.e || "", mean:f.d || "" }; if(f.where) FOOD_WHERE[f.n] = f.where; GITEMS.push([f.n, 0]); }));
-  BTASK.length = 0; const ct = O && O.CTASKS ? TRIP.cities.flatMap(id => O.CTASKS[id] || []) : []; ct.map(t => t.slice(1)).concat(["拍一张大家影子的合照","和本地阿姨聊两句","坐一次公交","买一张明信片寄回家","喝一杯本地茶","在庙里求一支签","找一面最好看的墙拍照","学会一句当地话"]).slice(0, 16).forEach(t => BTASK.push(t)); while(BTASK.length < 16) BTASK.push("自由发挥一件小事");
+  BTASK.length = 0; const ct = O && O.CTASKS ? TRIP.cities.flatMap(id => O.CTASKS[id] || []) : []; [...new Set(ct.map(t => t.slice(1)).concat(["拍一张大家影子的合照","和本地阿姨聊两句","坐一次公交","买一张明信片寄回家","喝一杯本地茶","在庙里求一支签","找一面最好看的墙拍照","学会一句当地话","吃一样没吃过的水果","找到一只街上的猫","在路边买一束花","听一首当地人推荐的歌","走一条没走过的小巷","拍一张日落","和店老板合照","帮旅伴拍一张好看的照片","尝一口当地的早餐","找一个看得到全城的地方"]))].slice(0, 16).forEach(t => BTASK.push(t));
   Object.keys(SPOTS).forEach(k => delete SPOTS[k]); GEO.length = 0; const coords = T.coords || {};
   gs.forEach(g => g.spots.forEach(sp => { SPOTS[sp.n] = { d:sp.d, tip:sp.tip || "", t:sp.t || "", time:sp.time || "" }; }));
   DAYS.forEach((d, di) => d.items.forEach(it => { if(it.kind !== "sight" && it.kind !== "food") return; let ll = coords[it.title]; if(!ll){ const key = Object.keys(SPOTS).find(k => it.title.includes(k) || k.includes(it.title.replace(/ · .*/, ""))); const sp = key && gs.flatMap(g => g.spots).find(s => s.n === key); ll = sp && sp.ll; } if(!ll) return; const ex = GEO.find(g => g[0] === it.title); if(ex) ex[3].push(di); else GEO.push([it.title, ll[0], ll[1], [di]]); }));
@@ -1550,20 +1529,19 @@ function applyTrip(T){ if(window.TD_SAFE) window.TD_SAFE(T);
   DAYCFG.length = 0; DAYS.forEach((d, i) => DAYCFG.push({ photo:dayPhoto(i), place:(d.items.find(x => x.main && x.kind === "sight") || d.items.find(x => x.kind === "sight") || {}).title || d.title || d.city, city:d.city, temp:"—", wx:"", steps:"—", pics:0, voice:0 }));
   refreshDerived(); }
 function refreshDerived(){ { const W = window.TD_WX, c = DAYCFG[TODAY]; if(W && c && W.city === c.city && W.date === TDATE()){ c.temp = W.temp; if(W.text){ c.wx = W.text; c.desc = W.text; } } } if(FRIENDS[0]) FRIENDS[0][0] = (S.me || "我").slice(0, 1); if(typeof applySteps === "function") applySteps(); DAYCFG.forEach((c, i) => { c.photo = dayPhoto(i); c.pics = ALBUM.filter(a => a[4] === i).length; c.voice = VOICES.filter(v => v.day === i).reduce((n, v) => n + v.sec, 0); if(DIARY[i]) DIARY[i].ph = c.photo; });
-  Object.keys(ARCH).forEach(k => delete ARCH[k]); CITIES.forEach(c => { const st = okCheckins().filter(k => k.city === c.name).map(k => [k.photo || dayPhoto(k.di), k.title]); ARCH[c.id] = { n:c.name, en:c.en.toUpperCase(), col:c.color, b1:"#8FA9C0", b2:"#C49A70", st, have:st.length }; }); if(!ARCH[S.acity] && CITIES[0]) S.acity = CITIES[0].id;
+
   PLACES.length = 0; S.checkins.forEach((k, ci) => { if(k.status && k.status !== "ok") return; const c = DAYCFG[k.di] || {}; PLACES.push({ ci, k:k.photo || dayPhoto(k.di), n:cityEn(c.city), z:k.title, d:`${md(DAYS[k.di].date)} · ${k.at || ""}`, w:`${c.temp}° ${c.wx}`, s:"—", m:k.mood || 0, p:c.pics, v:mmss(c.voice || 0), cap:k.title }); }); }
 function addCheckin(){ const it = DAYS[CK.di].items[CK.ii], c = DAYCFG[CK.di]; const at = new Date().toTimeString().slice(0, 5);
-  const photo = (ckPics()[CK.pic]) || ""; S.checkins.push({ id: it.id, di:CK.di, ii:CK.ii, title:it.title, city:c.city, date:TDATE(), at, photo, mood:0 }); FEED.unshift({ a:0, t:`你在「${it.title}」打卡了`, s:`${c.city} · ${at}`, ic:"pin" }); refreshDerived(); toast(`已收进护照 · ${c.city} ${ARCH[CITIES.find(x => x.name === c.city)?.id]?.have || 1} 枚`); if(!NOSTAG) NOSTAG = true; render(); }
+  const photo = (ckPics()[CK.pic]) || ""; S.checkins.push({ ink: CK.ink || .85, id: it.id || uid8(), iid: it.id, di:CK.di, ii:CK.ii, title:it.title, city:c.city, date:TDATE(), at, photo, mood:0 }); FEED.unshift({ a:0, t:`你在「${it.title}」打卡了`, s:`${c.city} · ${at}`, ic:"pin" }); refreshDerived(); toast(`已收进护照 · ${c.city} ${okCheckins().filter(k => k.city === c.city).length || 1} 枚`); if(!NOSTAG) NOSTAG = true; render(); }
 /* ---- builders ---- */
-function tripFromGuide(gid, start, ndays, name){ const g = O.GUIDE_BY_ID[gid]; const plan = makePlan(g, ndays);
-  return { name:name || g.name, start, end:addDays(start, ndays - 1), budget:4000, currency:"MYR", cities:[gid], source:"guide", days:plan.map((items, d) => ({ date:addDays(start, d), city:g.name, title:(items[0] || {}).title || "", items })), prepaid:[], checklist:GENERIC_CHECK }; }
+
 function tripBlank(name, start, ndays, cityName){ const g = O.guideFor && O.guideFor(cityName); return { name:name || cityName || "新的旅行", start, end:addDays(start, ndays - 1), budget:4000, currency:"MYR", cities:g ? [g.id] : [], source:"blank", days:[], prepaid:[], checklist:GENERIC_CHECK }; }
 /* Excel: the same workbook the original app reads (sheets 旅行 / 行程 / 预付, plus 清单) */
 async function loadXLSX(){ if(window.XLSX) return window.XLSX; await new Promise((res, rej) => { const s = document.createElement("script"); s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); return window.XLSX; }
 const KIND_CN = { 景点:"sight", 美食:"food", 交通:"transit", 住宿:"lodging", 航班:"flight", 其他:"sight", 体验:"sight" };
 async function tripFromXlsx(file){ const XLSX = await loadXLSX(); const wb = XLSX.read(await file.arrayBuffer(), { type:"array", cellDates:true });
   const rows = name => { const ws = wb.Sheets[name] || wb.Sheets[wb.SheetNames.find(n => n.includes(name)) || ""]; return ws ? XLSX.utils.sheet_to_json(ws, { defval:"", raw:true, cellDates:true }) : []; };
-  const col = (r, ...keys) => { for(const k of keys){ const kk = Object.keys(r).find(x => x.replace(/\s|\*/g, "") === k); if(kk !== undefined && r[kk] !== "") return r[kk]; } return ""; };
+  const col = (r, ...keys) => { for(const k of keys){ const kk = Object.keys(r).find(x => x.replace(/\s|\*|（[^）]*）|\([^)]*\)/g, "") === k); if(kk !== undefined && r[kk] !== "") return r[kk]; } return ""; };
   const dateStr = v => { if(v instanceof Date) return `${v.getFullYear()}-${pad(v.getMonth()+1)}-${pad(v.getDate())}`; if(typeof v === "number" && v > 30000 && v < 80000){ const d = new Date(Math.round((v - 25569) * 864e5)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
     const s = String(v || "").trim().replace(/[年月]/g, "-").replace(/日/g, "").replace(/[./]/g, "-"); let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if(m) return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
     m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/); if(m){ let d = +m[1], mo = +m[2]; if(mo > 12 && d <= 12){ [d, mo] = [mo, d]; } return `${m[3]}-${pad(mo)}-${pad(d)}`; } return ""; };
@@ -1572,48 +1550,51 @@ async function tripFromXlsx(file){ const XLSX = await loadXLSX(); const wb = XLS
     const pm = /pm|p\.m\.|下午|晚上|傍晚/i.test(s), am = /am|a\.m\.|上午|早上|凌晨/i.test(s); if(pm && h < 12) h += 12; if(am && h === 12) h = 0; if(/半/.test(s)) mi = 30; return `${pad(h % 24)}:${pad(mi)}`; };
   const yes = v => /^(是|y|yes|true|1|✓)$/i.test(String(v || "").trim());
   const t = rows("旅行")[0] || {}; const cityIds = String(col(t, "城市") || "").split(/[,，、\s]+/).map(n => { const g = O.guideFor(n.trim()); return g ? g.id : null; }).filter(Boolean);
-  const T = { name:String(col(t, "名称", "旅行名称") || file.name.replace(/\.xlsx?$/i, "")), start:dateStr(col(t, "开始日期", "开始")), end:dateStr(col(t, "结束日期", "结束")), budget:+col(t, "每人预算", "预算") || 4000, currency:String(col(t, "币种") || "MYR"), rate:+col(t, "人民币汇率", "汇率") || .6, cities:cityIds, source:"xlsx", prepaid:[], checklist:[] };
+  const T = { name:String(col(t, "名称", "旅行名称") || file.name.replace(/\.xlsx?$/i, "")), start:dateStr(col(t, "开始日期", "开始")), end:dateStr(col(t, "结束日期", "结束")), budget:+col(t, "每人预算", "预算") || 4000, currency:String(col(t, "我的货币", "币种") || "MYR").toUpperCase().replace("RM", "MYR"), rate:+col(t, "汇率", "人民币汇率") || .6, cities:cityIds, source:"xlsx", prepaid:[], checklist:[] };
   const byDate = {}; rows("行程").forEach(r => { const date = dateStr(col(r, "日期")), title = String(col(r, "地点", "名称", "标题")).trim(); if(!date || !title) return; const city = String(col(r, "城市") || "").trim(); const g = city && O.guideFor(city);
-    (byDate[date] = byDate[date] || { date, city:g ? g.name : city || cityNameOf(cityIds[0]) || T.name, title:"", items:[] }).items.push({ t:timeStr(col(r, "时间")) || "09:00", title, kind:KIND_CN[String(col(r, "类型")).trim()] || "sight", dur:+col(r, "时长", "时长分钟") || 60, note:String(col(r, "备注") || "").trim(), spots:String(col(r, "候补", "候补地点") || "").split(/[,，、]/).map(x => x.trim()).filter(Boolean), main:yes(col(r, "主要", "主要行程")) }); });
+    (byDate[date] = byDate[date] || { date, city:g ? g.name : city || cityNameOf(cityIds[0]) || T.name, title:"", items:[] }).items.push({ t:timeStr(col(r, "时间")) || "09:00", title, kind:KIND_CN[String(col(r, "类型")).trim()] || "sight", dur:+col(r, "时长", "时长分钟") || 60, note:String(col(r, "备注") || "").trim(), spots:String(col(r, "候补", "候补地点") || "").split(/[,，、]/).map(x => x.trim()).filter(Boolean), main:yes(col(r, "主要", "主要行程")) }); const ll = parseLL(col(r, "位置", "坐标", "经纬度")); if(ll) (T.coords = T.coords || {})[title] = ll; });
   T.days = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date)); T.days.forEach(d => { d.items.sort((a, b) => a.t.localeCompare(b.t)); d.title = (d.items.find(i => i.main && i.kind === "sight") || d.items[0] || {}).title || ""; });
   if(!T.start && T.days.length) T.start = T.days[0].date; if(!T.end && T.days.length) T.end = T.days[T.days.length - 1].date; if(!T.start){ T.start = TDATE(); T.end = addDays(T.start, 4); }
   const CATX = { 住宿:"住宿", 酒店:"住宿", 机票:"交通", 航班:"交通", 门票:"门票", 景点:"门票", 交通:"交通", 餐饮:"餐饮", 美食:"餐饮", 购物:"购物" };
   rows("预付").forEach(r => { const name = String(col(r, "名称", "项目")).trim(), amount = +col(r, "金额"); if(!name || !(amount > 0)) return; T.prepaid.push({ note:name, amount, currency:String(col(r, "币种") || T.currency).toUpperCase().replace("RM", "MYR").replace("¥", "CNY"), category:CATX[String(col(r, "类别")).trim()] || "其他", split_n:+col(r, "分摊人数", "人数") || 1 }); });
   const cl = {}; rows("清单").forEach(r => { const cat = String(col(r, "分类", "类别") || "其他").trim(), item = String(col(r, "项目", "名称", "东西")).trim(); if(item) (cl[cat] = cl[cat] || []).push(item); }); T.checklist = Object.entries(cl).map(([cat, items]) => ({ cat, items }));
   if(!T.days.length) throw new Error("「行程」表里没有读到任何一行（需要 日期 和 地点 两列）"); return T; }
-async function downloadTemplate(){ const XLSX = await loadXLSX(); const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["名称","开始日期","结束日期","城市","每人预算","币种","人民币汇率"],["福建 · 厦门泉州","2026-10-31","2026-11-08","厦门, 泉州",4000,"MYR",0.6]]), "旅行");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["日期","时间","地点","城市","类型","时长","主要","备注","候补"],["2026-11-01","08:00","第八市场 · 早餐","厦门","美食",60,"","",""],["2026-11-01","10:00","鼓浪屿","厦门","景点",420,"是","含午餐","日光岩, 菽庄花园"],["2026-11-01","19:00","晚餐","厦门","美食",60,"","",""]]), "行程");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["名称","金额","币种","类别","分摊人数"],["全季酒店 · 3 晚",1326.74,"MYR","住宿",3]]), "预付");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["分类","项目"],["证件","护照"],["证件","机票行程单"],["行李","充电宝"]]), "清单");
-  XLSX.writeFile(wb, "旅行手账-行程模板.xlsx"); toast("模板已下载，填好再传回来"); }
-/* ---- books: every trip is a book; the current one drives the whole app ---- */
-function bookFromTrip(T){ const id = "b" + Date.now().toString(36); const g = O.GUIDE_BY_ID[(T.cities || [])[0]]; return { id, t:T.name.slice(0, 6), sub:T.cities.map(cityNameOf).join(" · ") || T.name, start:T.start, end:T.end, ph:PHKEYS[BOOKS2.length % 6], st:`${T.days.length} 天 · ${T.days.reduce((n, d) => n + d.items.length, 0)} 个安排`, guide:g ? g.id : undefined, trip:T, look:{ c:["sky","clay","moss","plum","gold","rose"][BOOKS2.length % 6], p:"plain", m:"star", rib:true, win:true, pin:false, arch:false } }; }
+async function downloadTemplate(){ try{ const r = await fetch("templates/trip-template.xlsx", { cache:"no-store" }); if(!r.ok) throw 0; const url = URL.createObjectURL(await r.blob()), a = document.createElement("a"); a.href = url; a.download = "旅行手账-空白模板.xlsx"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); toast("模板下载好了，填好再导入"); }catch(e){ toast("模板下载不了，连上网再试一次"); } }
+function bookFromTrip(T){ const id = "b" + Date.now().toString(36); const g = O.GUIDE_BY_ID[(T.cities || [])[0]]; return { id, t:T.name.slice(0, 24), sub:T.cities.map(cityNameOf).join(" · ") || T.name, start:T.start, end:T.end, ph:PHKEYS[BOOKS2.length % 6], st:`${T.days.length} 天 · ${T.days.reduce((n, d) => n + d.items.length, 0)} 个安排`, guide:g ? g.id : undefined, trip:T, look:{ c:["sky","clay","moss","plum","gold","rose"][BOOKS2.length % 6], p:"plain", m:"star", rib:true, win:true, pin:false, arch:false } }; }
 function useBook(id){ const b = BOOKS2.find(x => x.id === id); if(!b || !b.trip) return toast("这本还没有行程"); if(S.curBook && S.curBook !== id) stashBook(S.curBook); BOOKS2.forEach(x => x.cur = x.id === id); S.curBook = id; applyTrip(b.trip); restoreBook(id); if(window.TD_SYNC && window.TD_SYNC.onSwitch) window.TD_SYNC.onSwitch(b); S.tab = "home"; closeOv(); closeSheet(); render(); }
 function adoptTrip(T){ const b = bookFromTrip(T); b._fresh = true; b.rev = Date.now(); BOOKS2.push(b); useBook(b.id); const st = $("start"); st && st.remove(); confetti(); snd("success"); toast(`「${T.name}」开始了`); EXP.forEach(e => { if(e.pre){ e.payer = 0; e.who = "你"; e.pre = false; e.wasPre = true; if(!e.split.includes(0)) e.split.push(0); } }); b.trip.prepaid = []; if(EXP.some(e => e.wasPre)) setTimeout(prepaidReview, 900); }
 /* ---- first screen ---- */
-function openStart(extra){ const el = document.createElement("div"); el.className = "start"; el.id = "start"; const hasGuide = O && O.GUIDES;
-  el.innerHTML = `<div class="logo"><img src="${LOGO}" alt=""><div><h1>旅行手账</h1><div class="en">TRIP DECK</div></div></div>
-    <p class="sub">${extra ? "再做一本新的旅行书。" : "一群人一起写的旅行手账。先把这趟旅行的行程放进来，其他的——票根、打卡、技能牌、账本——都会跟着长出来。"}</p>
-    ${extra ? "" : `<div class="lbl">你叫什么</div><input class="dinput" id="stname" maxlength="8" placeholder="旅伴会看到这个名字" value="${S.me || ""}" style="margin-top:8px">`}
-    ${!extra ? `<div class="have"><b>已经在用了？</b>
-      <label for="stjoin">旅伴给了你房间号</label><div class="addrow" style="margin-top:6px"><input id="stjoin" placeholder="6 位房间号，比如 AB12CD" maxlength="9" autocapitalize="characters"><button class="chip on" data-act="stjoingo" style="height:46px; flex-shrink:0">加入</button></div>
-      <label for="stcode" style="margin-top:12px">换了手机，想找回自己</label><div class="addrow" style="margin-top:6px"><input id="stcode" placeholder="你的 8 位身份码" maxlength="9" autocapitalize="characters"><button class="chip on" data-act="stcodego" style="height:46px; flex-shrink:0">找回</button></div></div>
-    <div class="lbl">或者，新开一本</div>` : `<div class="lbl">这趟旅行的行程</div>`}
-    <label class="opt main"><span class="oi" style="background:rgba(232,168,100,.2); color:var(--amber)">${I("grid",24)}</span><span><b>导入 Excel 行程表</b><small>和原版一样的模板：旅行 / 行程 / 预付 / 清单 四张表</small></span><input type="file" accept=".xlsx,.xls" id="stxlsx" style="position:absolute; width:1px; height:1px; opacity:0"></label>
-    <button class="opt" data-act="sttpl"><span class="oi" style="background:rgba(159,184,216,.18); color:#CFE0F5">${I("book",24)}</span><span><b>下载空白模板</b><small>先拿一份 .xlsx 填，填好再传回来</small></span></button>
+const START_ART = `<svg viewBox="200 120 624 784" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EAD6A6"/><stop offset=".5" stop-color="#C9A86A"/><stop offset="1" stop-color="#9A773C"/></linearGradient><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2E3F6B"/><stop offset=".55" stop-color="#E7A46B"/><stop offset="1" stop-color="#F3D29A"/></linearGradient>
+<clipPath id="win"><rect x="352" y="252" width="320" height="520" rx="160"/></clipPath></defs>
 
-    ${hasGuide ? `<button class="opt" data-act="stguide"><span class="oi" style="background:rgba(201,178,232,.18); color:#E3D6F5">${I("spark",24)}</span><span><b>从城市资料生成</b><small>${O.GUIDES.length} 个城市的景点和美食，选一个就有行程草稿</small></span></button>` : ""}
-    <button class="opt" data-act="restore"><span class="oi" style="background:rgba(255,255,255,.07); color:var(--mu)">${I("book",24)}</span><span><b>从备份恢复</b><small>换手机时，选旧手机存的备份文件</small></span></button>
-    <button class="opt" data-act="stblank"><span class="oi" style="background:rgba(255,255,255,.07); color:var(--mu)">${I("plus",24)}</span><span><b>空白的一本</b><small>只填名字和日期，行程以后再加</small></span></button>
-    ${extra ? `<div style="margin-top:14px"><button class="cbtn ghost" data-act="stcancel">先不用</button></div>` : ""}
-    <p class="xlsx-help">Excel 的「行程」表至少要有 <code>日期</code> 和 <code>地点</code> 两列，可选 <code>时间</code>、<code>城市</code>、<code>类型</code>（景点 / 美食 / 交通 / 住宿 / 航班）、<code>时长</code>、<code>主要</code>、<code>备注</code>、<code>候补</code>。</p>`;
-  $("app").appendChild(el); const f = $("stxlsx"); f.onchange = async () => { const file = f.files && f.files[0]; if(!file) return; saveName(); toast("正在读表…"); try{ const T = await tripFromXlsx(file); adoptTrip(T); }catch(e){ toast("读不了这个文件：" + (e.message || e)); } }; }
+<rect x="322" y="222" width="380" height="580" rx="190" fill="#1B2438" stroke="url(#gold)" stroke-width="8"/>
+<g clip-path="url(#win)"><rect x="352" y="252" width="320" height="520" fill="url(#sky)"/><circle cx="512" cy="600" r="70" fill="#FBE7C2" opacity=".95"/>
+<path d="M352 640 q80 -30 160 0 t160 0 V780 H352Z" fill="#1B2438"/><path d="M352 680 q80 -26 160 0 t160 0" fill="none" stroke="#C9A86A" stroke-width="4" opacity=".7"/></g>
+<rect x="352" y="252" width="320" height="520" rx="160" fill="none" stroke="#000" stroke-opacity=".25" stroke-width="10"/></svg>`;
+function openStart(extra){ const el = document.createElement("div"); el.className = "start start2"; el.id = "start"; const hasGuide = O && O.GUIDES;
+  el.innerHTML = `<div class="st-hero${extra ? " small" : ""}"><div class="st-glow"></div><div class="st-art">${START_ART}</div>
+      <h1>旅行手账</h1><div class="st-en">TRIP DECK</div><p>${extra ? "再开一本新的旅行书" : "一群人，一起写的旅行手账"}</p></div>
+    ${extra ? "" : `<div class="st-card st-name"><label for="stname">先告诉旅伴你是谁</label><input class="dinput" id="stname" maxlength="8" placeholder="你的名字，比如：阿和" value="${S.me || ""}" autocomplete="nickname"></div>`}
+    <h2 class="st-h">开一本新的旅行</h2>
+    <div class="st-choices">
+      ${hasGuide ? `<button class="st-opt st-feature" data-act="stguide"><span class="st-badge">推荐</span><span class="st-ic">${I("spark",26)}</span><b>选城市开始</b><small>可以选好几个城市，比如怡保 → 吉隆坡 → 新山。景点美食资料给你挑，${O.GUIDES.length} 个城市可选</small></button>` : ""}
+      <label class="st-opt"><span class="st-ic">${I("grid",24)}</span><b>导入 Excel 行程</b><small>已经排好的行程表，直接放进来</small><input type="file" accept=".xlsx,.xls" id="stxlsx" style="position:absolute; width:1px; height:1px; opacity:0"></label>
+      <button class="st-opt" data-act="stblank"><span class="st-ic">${I("plus",24)}</span><b>空白的一本</b><small>只填名字和日期，行程以后再加</small></button>
+    </div>
+    <div class="st-xl"><button class="st-link" data-act="sttpl">没有 Excel？下载一份空白模板</button>
+      <details><summary>Excel 要怎么写？</summary><p>「行程」表至少要有 <code>日期</code> 和 <code>地点</code> 两列，可选 <code>时间</code>、<code>城市</code>、<code>类型</code>（景点 / 美食 / 交通 / 住宿 / 航班）、<code>时长</code>、<code>主要</code>、<code>备注</code>、<code>候补</code>。</p></details></div>
+    ${extra ? `<div style="margin-top:18px"><button class="cbtn ghost" data-act="stcancel">先不用</button></div>` : `
+    <h2 class="st-h">旅伴已经开好了？</h2>
+    <div class="st-card st-join"><label for="stjoin">输入旅伴给你的 6 位房间号</label><div class="addrow"><input id="stjoin" placeholder="比如 AB12CD" maxlength="9" autocapitalize="characters" autocomplete="off"><button class="chip on" data-act="stjoingo">加入</button></div></div>
+    <div class="st-foot"><details class="st-recover"><summary>换了手机？找回自己</summary><div class="addrow"><input id="stcode" placeholder="你的 8 位身份码" maxlength="9" autocapitalize="characters" autocomplete="off"><button class="chip on" data-act="stcodego">找回</button></div><small>身份码在旧手机的「设置」里</small></details>
+      <button class="st-link" data-act="restore">从备份文件恢复</button></div>`}`;
+  $("app").appendChild(el); const f = $("stxlsx"); f.onchange = async () => { const file = f.files && f.files[0]; if(!file) return; saveName(); toast("正在读表…"); try{ const T = await tripFromXlsx(file); adoptTrip(T); }catch(e){ toast(e instanceof Event || !e.message ? "要连上网才能读 Excel，连上网再试一次" : "读不了这个文件：" + e.message); } }; }
 function saveName(){ const n = $("stname"); if(n && n.value.trim()){ S.me = n.value.trim(); FRIENDS[0][0] = S.me.slice(0, 1); if(window.TD_SYNC && window.TD_SYNC.setName) window.TD_SYNC.setName(S.me); } }
-function guideStartSheet(){ NT.q = ""; sheet(`<h3>从城市资料生成</h3><label for="ntq" style="position:absolute; left:-9999px">搜城市</label><input class="dinput" id="ntq" placeholder="搜城市：吉隆坡、潮汕、清迈…" style="margin-top:4px"><div class="citylist" id="citylist">${cityListHTML()}</div>
-    <div class="lbl">哪天出发</div><input class="dinput" id="ntdate" type="date" value="${NT.start}" style="margin-top:8px"><div class="lbl">玩几天</div><div class="step" style="margin-top:8px"><button data-act="ntd:-1" aria-label="少一天">−</button><b id="ntdays">${NT.days}</b><button data-act="ntd:1" aria-label="多一天">+</button><span style="color:var(--mu); font-size:13px">天</span></div>
-    <div style="margin-top:16px"><button class="cbtn" data-act="stguidego">生成行程，开始</button></div>`); }
-function blankSheet(){ sheet(`<h3>空白的一本</h3><div class="lbl">名字</div><input class="dinput" id="bkname" placeholder="比如：东京 · 冬天" maxlength="12" style="margin-top:8px"><div class="lbl">去哪（可不填）</div><input class="dinput" id="bkcity" placeholder="城市名，有资料的会自动带上美食和景点" style="margin-top:8px">
+function guideStartSheet(){ if(!NT.start || NT.start < TDATE()) NT.start = addDays(TDATE(), 7); NT.q = ""; NT.mode = "start"; NT.list = []; NT.plan = false;
+  sheet(`<h3>开一本新的旅行</h3><p class="sub">按顺序选要去的城市，每个城市玩几天</p><div id="ntlist">${ntListHTML()}</div>${ntPickHTML()}
+    <div class="lbl">哪天出发</div><input class="dinput" id="ntdate" type="date" value="${NT.start}" style="margin-top:8px">${ntPlanHTML()}
+    <div style="margin-top:16px"><button class="cbtn" data-act="stguidego">开始</button></div>`); }
+function blankSheet(){ if(!NT.start || NT.start < TDATE()) NT.start = addDays(TDATE(), 7); sheet(`<h3>空白的一本</h3><div class="lbl">名字</div><input class="dinput" id="bkname" placeholder="比如：东京 · 冬天" maxlength="12" style="margin-top:8px"><div class="lbl">去哪（可不填）</div><input class="dinput" id="bkcity" placeholder="城市名，有资料的会自动带上美食和景点" style="margin-top:8px">
     <div class="lbl">哪天出发</div><input class="dinput" id="bkdate" type="date" value="${NT.start}" style="margin-top:8px"><div class="lbl">几天</div><div class="step" style="margin-top:8px"><button data-act="ntd:-1" aria-label="少一天">−</button><b id="ntdays">${NT.days}</b><button data-act="ntd:1" aria-label="多一天">+</button><span style="color:var(--mu); font-size:13px">天</span></div>
     <div style="margin-top:16px"><button class="cbtn" data-act="stblankgo">开始</button></div>`); }
 function bootTrip(){ window.TD_BOOTED = true; const b = BOOKS2.find(x => x.id === S.curBook) || BOOKS2.find(x => x.trip); if(b && b.trip){ BOOKS2.forEach(x => x.cur = x.id === b.id); S.curBook = b.id; applyTrip(b.trip); restoreBook(b.id); render(); const st = $("start"); st && st.remove(); } else if(!$("start")) openStart(false); }
@@ -1622,7 +1603,7 @@ document.addEventListener("click", e => {
   switch(a){
     case "sttpl": downloadTemplate(); break;
     case "stguide": saveName(); guideStartSheet(); break;
-    case "stguidego": { const g = gById(NT.guide); if(!g) return toast("先选一个城市"); const start = ($("ntdate") || {}).value || NT.start; closeSheet(); adoptTrip(tripFromGuide(g.id, start, NT.days)); break; }
+    case "stguidego": { if(!(NT.list || []).length) return toast("先选至少一个城市"); const start = ($("ntdate") || {}).value || NT.start; closeSheet(); adoptTrip(tripFromCities(NT.list, start, NT.plan)); break; }
     case "stblank": saveName(); blankSheet(); break;
     case "stblankgo": { const name = (($("bkname") || {}).value || "").trim(), city = (($("bkcity") || {}).value || "").trim(), start = ($("bkdate") || {}).value || NT.start; if(!name && !city) return toast("给这本书取个名字"); closeSheet(); adoptTrip(tripBlank(name, start, NT.days, city)); break; }
     case "stjoingo": { saveName(); joinRoom(($("stjoin") || {}).value); break; }
@@ -1633,7 +1614,7 @@ document.addEventListener("click", e => {
   }
 });
 /* the book buttons: 翻开 / 继续写 switch the whole app to that trip */
-document.addEventListener("click", e => { const b = e.target.closest('[data-act="oldbook"], [data-act="soonbook"]'); if(!b) return; const bk = BOOKS2[shelfSel]; if(bk && bk.trip && !bk.cur){ e.stopImmediatePropagation(); useBook(bk.id); toast(`换到「${bk.t}」`); } }, true);
+document.addEventListener("click", e => { const b = e.target.closest('[data-act="oldbook"], [data-act="soonbook"]'); if(!b) return; const bk = BOOKS2[shelfSel]; if(bk && bk.trip && !bk.cur){ e.stopImmediatePropagation(); useBook(bk.id); toast(`换到「${escT(bk.t)}」`); } }, true);
 /* ---- every book keeps its own photos, check-ins, expenses, games (shared) and its own packing, tickets, diary (private) ---- */
 S.privBy = S.privBy || {};
 const freshGames = () => ({ bingo:{}, guess:{ round:null, history:[] } });
@@ -1676,7 +1657,7 @@ function paperBody(){ const d = DAYS[TODAY], c = DAYCFG[TODAY], ks = S.checkins.
 function openPaper(){ window.CUR_PAGE = "paper";  const c = DAYCFG[TODAY], d = DAYS[TODAY], ks = S.checkins.filter(k => k.di === TODAY), nt = DIARY[TODAY], nxt = DAYS[TODAY + 1], body = paperBody();
   page(`<div class="scr">${back("每日小报", `<span style="display:flex; gap:6px"><button class="chip" data-act="keeppaper">收进手账</button><button class="chip" data-act="xpaper">存成图片</button></span>`)}
   <article class="paperN"><div class="mast"><b>旅途小报</b><small>THE TRIP DAILY · 第 ${TODAY + 1} 期</small></div>
-    <div class="dateline"><span>${cnDate(d.date)} ${wk(d.date)}</span><span>${c.city} · ${c.temp}° ${c.wx}</span></div>
+    <div class="dateline"><span>${cnDate(d.date)} ${wk(d.date)}</span><span>${c.city}${c.temp !== "—" && c.temp != null && c.temp !== "" ? ` · ${c.temp}° ${c.wx || ""}` : ""}</span></div>
     <div class="lead"><h2>${body.head}</h2><figure style="margin:0" class="ph3wrap"><div class="ph3"><img src="${P[c.photo] || c.photo}" alt="${c.place}"></div><figcaption>${c.place} · ${c.city}${ALBUM.find(a => a[4] === TODAY) ? "" : " · 还没有今天的照片，先用插图"}</figcaption></figure></div>
     <div class="cols2">${body.paras.map(p => `<p>${p}</p>`).join("")}
       <div class="box"><h4>今日数字</h4><div class="nums"><div><b>${HSYM()}${Math.round(todaySpend())}</b><small>今天花了</small></div><div><b>${c.pics}</b><small>张照片</small></div><div><b>${ks.length}</b><small>个打卡</small></div></div></div>
@@ -1688,7 +1669,7 @@ function openReceipt(){ const r = (a, b) => `<div class="r"><span>${a}</span><sp
     <div class="c"><b style="font-size:15px">TRIP DECK</b><br>TRAVEL RECEIPT · 旅行发票</div><hr>
     ${r("TRIP",TRIP.name)}${r("DATE",TRIP.rangeDot)}${r("TRAVELLER",S.me || "我")}${r("WITH",NAMES.slice(1).join(" · ") || "—")}<hr>
     ${r("城市 CITIES",CITIES.length)}${r("打卡 CHECK-INS",S.checkins.length)}${r("美食票 FOOD TICKETS", S.wallet.length)}${r("照片 PHOTOS",ALBUM.length)}${r("技能牌 SKILLS",DK.card ? 1 : 0)}<hr>
-    ${r("花费 SPENT",HSYM() + " " + Math.round(spentTotal()).toLocaleString())}${r("预算 BUDGET",HSYM() + " " + TRIP.budget.toLocaleString())}<hr>
+    ${r("大家一共 TOTAL",HSYM() + " " + Math.round(spentTotal()).toLocaleString())}${r("我的部分 MINE",HSYM() + " " + Math.round(EXP.filter(e => e.kind !== "transfer").reduce((n, e) => n + myShare(e), 0)).toLocaleString())}${r("预算 BUDGET",HSYM() + " " + TRIP.budget.toLocaleString())}<hr>
     <div class="r tot"><span>TOTAL</span><span>满载而归</span></div><hr>
     <svg viewBox="0 0 200 40" width="100%" height="40" aria-hidden="true">${Array.from({length: 60}, (_, i) => { const w = [1,2,1,3,1,2][i % 6], x = i * 3.3; return `<rect x="${x.toFixed(1)}" y="0" width="${w * .9}" height="34" fill="#1B1A18"/>`; }).join("")}</svg>
     <div class="c" style="font-size:10px">${ROOM() ? ROOM() + "-" : ""}${TRIP.end.replace(/-/g, "")} · THANK YOU · 下次见</div></div></div>
@@ -1742,7 +1723,7 @@ async function fetchRate(){ try{ const r = await fetch(`https://api.frankfurter.
 let IT = null;
 function tripBack(){ const b = BOOKS2.find(x => x.id === S.curBook); if(b && b.trip) b.trip.days = DAYS.map(d => ({ date:d.date, city:d.city, title:d.title, items:d.items.map(it => ({ id:it.id, cut:it.cut, cutBy:it.cutBy, added:it.added, t:it.t, title:it.title, kind:it.kind, dur:it.dur, main:it.main, note:it.note, spots:it.spots })) })); }
 function itemSheet(di, ii){ const it = ii != null ? DAYS[di].items[ii] : null; IT = { di, ii, title:it ? it.title : "", t:it ? it.t : "10:00", kind:it ? it.kind : "sight", dur:it ? it.dur : "1 小时", main:it ? it.main : false };
-  const sug = (TRIP.guides || []).flatMap(g => g.spots.map(s => s.n)).concat((TRIP.guides || []).flatMap(g => g.foods.map(f => f.n))).filter(n => !DAYS[di].items.some(x => x.title === n)).slice(0, 14);
+  const dg = (TRIP.guides || []).find(g => g.name === DAYS[di].city), gs = dg ? [dg] : (TRIP.guides || []); const sug = gs.flatMap(g => g.spots.map(s => s.n)).concat(gs.flatMap(g => g.foods.map(f => f.n))).filter(n => !DAYS[di].items.some(x => x.title === n)).slice(0, 14);
   sheet(`<h3>${it ? "改这个安排" : `D${pad(di + 1)} 加一个安排`}</h3><label for="itname" style="position:absolute; left:-9999px">名字</label><input class="dinput" id="itname" placeholder="地方或吃的，比如：鼓浪屿" value="${IT.title}" maxlength="24" style="margin-top:4px">
     ${sug.length ? `<div class="sug">${sug.map(n => `<button class="chip" data-act="itsug:${n}">${n}</button>`).join("")}</div>` : ""}
     <div class="lbl">时间</div><input class="dinput" id="ittime" type="time" value="${IT.t}" style="margin-top:8px">
@@ -1920,7 +1901,7 @@ function openPassport(open){ window.CUR_PAGE = "passport";  const me = S.me || "
   const pages = [];
   pages.push(`<section class="ppg"><h4><span>PASPORT · 旅行护照</span><span>No. TD${TRIP.start.replace(/-/g, "")}</span></h4><div class="ppid"><button class="ph" data-act="avsheet:0" aria-label="换头像">${FRIENDS[0][2] ? `<span class="cav">${avatarSVG(FRIENDS[0][2])}</span>` : `<span style="font-size:44px; font-weight:700; color:#8A7A6A">${me.slice(0, 1)}</span>`}</button>
     <dl><dt>姓名 · NAME</dt><dd>${me}</dd><dt>旅行 · TRIP</dt><dd>${TRIP.name}</dd><dt>日期 · DATE</dt><dd>${TRIP.rangeDot}</dd><dt>同行 · WITH</dt><dd>${NAMES.slice(1).join(" · ") || "—"}</dd></dl></div>
-    <p style="font-size:11px; color:#8A7A6A; margin-top:14px">点照片可以换一个可爱的头像</p>
+    <p style="font-size:11px; color:#8A7A6A; margin-top:14px">点照片可以换头像，也可以用自拍</p>
     <div class="mrz">P&lt;MYS${me.replace(/\s/g, "").toUpperCase()}&lt;&lt;TRIPDECK&lt;&lt;&lt;&lt;&lt;&lt;<br>TD${TRIP.start.replace(/-/g, "")}MYS${TRIP.end.replace(/-/g, "").slice(2)}&lt;&lt;&lt;${S.checkins.length}</div><span class="no">— 1 —</span></section>`);
   pages.push(`<section class="ppg"><h4><span>入境章 · ENTRY</span><span>${vis.filter(v => v.first).length} / ${CITIES.length}</span></h4><div class="ppseals">${vis.map((v, i) => v.first ? `<div>${sealSVG(v.c.name, v.c.en.toUpperCase(), v.first.date.replace(/-/g, "."), v.c.color, i % 2 ? 6 : -8)}</div>` : `<div style="opacity:.3; filter:grayscale(1)">${sealSVG(v.c.name, v.c.en.toUpperCase(), "", "#8a8a8a", 0)}</div>`).join("")}</div>
     <p style="font-size:12px; color:#7A6A5A; margin-top:16px; line-height:1.6">到了一个城市，第一次打卡就会盖上入境章。</p>
@@ -1998,13 +1979,13 @@ document.addEventListener("input", e => { if(e.target.id === "aereal" && typeof 
 
 /* ===================== part 15: stable ids, undo, escape, name change, wipe, first-day tips ===================== */
 function itemId(date, t, title){ let h = 0; for(const ch of (date + "|" + t + "|" + title)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return "i" + h.toString(36); }
-function ckDone(di, ii){ const it = DAYS[di] && DAYS[di].items[ii]; if(!it) return false; return S.checkins.some(c => it.id && c.id ? c.id === it.id : (c.di === di && c.ii === ii)); }
+function ckDone(di, ii){ const it = DAYS[di] && DAYS[di].items[ii]; if(!it) return false; return S.checkins.some(c => c.status !== "no" && (it.id && (c.iid === it.id || c.id === it.id) || (!c.iid && c.di === di && c.ii === ii))); }
 let undoT = 0;
 function undoBar(text, onUndo){ const old = document.querySelector(".undobar"); old && old.remove(); clearTimeout(undoT); const el = document.createElement("div"); el.className = "undobar"; el.innerHTML = `<span>${text}</span><button type="button">撤销</button>`; $("app").appendChild(el);
   el.querySelector("button").onclick = () => { el.remove(); clearTimeout(undoT); onUndo(); toast("已撤销"); snd("success"); }; undoT = setTimeout(() => el.remove(), 6000); }
 document.addEventListener("keydown", e => { if(e.key !== "Escape") return; if($("sheet").classList.contains("on")) return closeSheet(); if($("vw")) return closeViewer(); if(document.querySelector(".ov.on")) closeOv(); });
 function nameSheet(){ sheet(`<h3>我的名字</h3><input class="dinput" id="mename" maxlength="8" value="${S.me || ""}" placeholder="旅伴会看到这个名字" style="margin-top:6px"><div style="margin-top:12px"><button class="cbtn" data-act="namesave">改好了</button></div>`); setTimeout(() => $("mename") && $("mename").focus(), 300); }
-function tipsHTML(){ if(S.tipsSeen || !DAYS.length) return ""; return `<div class="tips"><button class="x" data-act="tipsx" aria-label="收起">收起</button><b>${TRIP.name} · 开始前三件事</b><ol><li>行程页点任何地方 → <b style="display:inline">盖章打卡</b>，照片会进护照</li><li>首页「记录此刻」：传照片、写几句</li><li>玩法页每天抽一张技能牌，不发动会失控</li></ol></div>`; }
+function tipsHTML(){ if(S.tipsSeen || !DAYS.length || S.checkins.length || ALBUM.length || (typeof PHASE !== "undefined" && PHASE !== "before" && TODAY > 0)) return ""; return `<div class="tips"><button class="x" data-act="tipsx" aria-label="收起">收起</button><b>${TRIP.name} · 开始前三件事</b><ol><li>行程页点任何地方 → <b style="display:inline">盖章打卡</b>，照片会进护照</li><li>首页「记录此刻」：传照片、写几句</li><li>玩法页每天抽一张技能牌，不发动会失控</li></ol></div>`; }
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if(!b) return; const [a] = b.dataset.act.split(":");
   switch(a){
@@ -2081,7 +2062,7 @@ document.addEventListener("click", e => {
     case "eesave": { const x = EXP[EE.i], t = (($("eet") || {}).value || "").trim(), v = parseFloat(($("eerm") || {}).value); if(!(v > 0)) return toast("金额要大于 0");
       if(t) x.t = t; x.u = Date.now(); if(Math.abs(v - expRM(x)) > .001){ x.rm = v; if(x.cny) x.real = true; } x.payer = EE.payer; x.who = EE.payer === 0 ? "你" : NAMES[EE.payer]; x.split = [...EE.split].sort(); if(EE.n > x.split.length) x.splitN = EE.n; else delete x.splitN;
       closeSheet(); NOSTAG = true; render(); toast("改好了"); snd("success"); break; }
-    case "eedel": { const [x] = EXP.splice(EE.i, 1), i = EE.i, key = expKey(x); (S.del = S.del || []).push(key); closeSheet(); NOSTAG = true; render(); undoBar(`删掉了「${x.t}」`, () => { EXP.splice(i, 0, x); S.del = S.del.filter(d => d !== key); NOSTAG = true; render(); }); break; }
+    case "eedel": { const [x] = EXP.splice(EE.i, 1), i = EE.i, key = expKey(x); (S.del = S.del || []).push(key); closeSheet(); NOSTAG = true; render(); undoBar(`删掉了「${escT(x.t)}」`, () => { EXP.splice(i, 0, x); S.del = S.del.filter(d => d !== key); NOSTAG = true; render(); }); break; }
     case "pppay": { const i = +p[1], k = +p[2], x = EXP[i]; x.payer = k; x.who = k === 0 ? "你" : NAMES[k]; if(!x.split.includes(0)) x.split.push(0); prepaidReview(); break; }
     case "ppother": { const i = +p[1], row = $("pp" + i); if(!row || row.querySelector(".addrow")) break; row.insertAdjacentHTML("beforeend", `<div class="addrow"><input id="ppn${i}" placeholder="是谁付的？写名字（会加进旅伴）" maxlength="8"><button class="chip on" data-act="ppname:${i}" style="height:46px">好</button></div>`); setTimeout(() => $("ppn" + i).focus(), 50); break; }
     case "ppname": { const i = +p[1], n = (($("ppn" + i) || {}).value || "").trim(); if(!n) return toast("写个名字"); const k = NAMES.indexOf(n) > 0 ? NAMES.indexOf(n) : addPerson(n), x = EXP[i]; x.payer = k; x.who = n; x.split = [...new Set([...(x.split || [0]), 0, k])]; prepaidReview(); break; }
@@ -2148,7 +2129,8 @@ document.addEventListener("click", e => {
 async function stubPNG(st){ const img = await new Promise((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = rej; im.src = st.src; });
   const vert = st.layout === "v", W = vert ? 900 : 1500, H = vert ? 1350 : 600, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d"), f = fontOf(st.font), R = 36;
   const rr = (X, Y, w, h, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + w, Y, X + w, Y + h, r); x.arcTo(X + w, Y + h, X, Y + h, r); x.arcTo(X, Y + h, X, Y, r); x.arcTo(X, Y, X + w, Y, r); x.closePath(); };
-  const cover = (X, Y, w, h) => { const s = Math.max(w / img.width, h / img.height), iw = img.width * s, ih = img.height * s; x.save(); x.beginPath(); x.rect(X, Y, w, h); x.clip(); x.drawImage(img, X + (w - iw) / 2, Y + (h - ih) / 2, iw, ih); x.restore(); };
+  const cover = (X, Y, w, h) => { const cr = st.crop || { x:50, y:50, z:1 }, px = cr.x / 100, py = cr.y / 100, z = cr.z || 1, s = Math.max(w / img.width, h / img.height), iw = img.width * s, ih = img.height * s, ox = X + w * px, oy = Y + h * py;
+    const dx = ox + (X - (iw - w) * px - ox) * z, dy = oy + (Y - (ih - h) * py - oy) * z; x.save(); x.beginPath(); x.rect(X, Y, w, h); x.clip(); const fx = (STUB_FX[st.fx] || [])[1]; if(fx) x.filter = fx; x.drawImage(img, dx, dy, iw * z, ih * z); x.filter = "none"; x.restore(); };
   rr(0, 0, W, H, R); x.save(); x.clip();
   if(!vert){ const pw = W * .72; cover(0, 0, pw, H); x.fillStyle = st.col; x.fillRect(pw, 0, W - pw, H);
     x.fillStyle = "rgba(255,255,255,.08)"; x.font = `700 ${H * .9}px -apple-system, "PingFang SC", sans-serif`; x.fillText((st.en || "T")[0], pw + 40, H * .92);
@@ -2159,6 +2141,8 @@ async function stubPNG(st){ const img = await new Promise((res, rej) => { const 
     rr(56, 270, W - 112, H - 330, 26); x.save(); x.clip(); cover(56, 270, W - 112, H - 330); x.restore();
     if(st.cap){ x.font = `${st.font === "hand" || st.font === "brush" ? 60 : 42}px ${f}`; const tw = x.measureText(st.cap).width; x.fillStyle = "rgba(10,12,16,.55)"; rr(80, H - 160, tw + 56, 80, 40); x.fill(); x.fillStyle = "#fff"; x.fillText(st.cap, 108, H - 106); } }
   x.restore(); for(const [cx, cy] of vert ? [] : [[W * .72, 0], [W * .72, H]]){ x.save(); x.globalCompositeOperation = "destination-out"; x.beginPath(); x.arc(cx, cy, 26, 0, 7); x.fill(); x.restore(); }
+  if(st.pm){ try{ const pmi = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(postmarkSVG(st)); }); const pw = vert ? 420 : 400, ph = pw * .6; x.drawImage(pmi, vert ? W - pw - 50 : W * .72 - pw - 20, vert ? H - ph - 90 : H - ph - 24, pw, ph); }catch(e){} }
+  if(st.holo){ x.save(); rr(0, 0, W, H, R); x.clip(); const g = x.createLinearGradient(0, 0, W, H); [[0, "rgba(255,0,170,0)"], [.3, "rgba(255,0,170,.22)"], [.5, "rgba(0,220,255,.24)"], [.7, "rgba(255,240,0,.2)"], [1, "rgba(255,240,0,0)"]].forEach(([p, c]) => g.addColorStop(p, c)); x.globalCompositeOperation = "screen"; x.fillStyle = g; x.fillRect(0, 0, W, H); x.restore(); }
   return c.toDataURL("image/png"); }
 function deliverImage(url, name){ return (async () => { try{ const blob = await (await fetch(url)).blob(), file = new File([blob], `${name}.png`, { type:"image/png" });
     if(navigator.canShare && navigator.canShare({ files:[file] })){ try{ await navigator.share({ files:[file], title:name }); toast("在分享面板里选「存储图像」，就会存进相册"); return; }catch(e){ if(e && e.name === "AbortError") return; } }
@@ -2193,7 +2177,7 @@ function openSecret(){ const done = S.secretDone[TDATE()];
     <button class="env" id="env" data-act="envopen" aria-label="拆开信封" style="display:block; border:0; padding:0; background:none; color:inherit"><span class="letter"><small>SECRET MISSION · ${+TDATE().slice(5,7)}/${TDATE().slice(8)}</small><p>${SECRETS2[secretIdx()]}</p></span><span class="bodyE"></span><span class="flap"></span><span class="seal">秘</span></button>
     <p id="envh" style="text-align:center; font-size:13px; color:var(--mu); margin:36px 0 0">${done ? "今天的已经做到了，明天会有新的一封" : "点信封，拆开今天的任务"}</p>
     <div style="padding:16px 20px 0"><button class="cbtn" data-act="secdone2" ${done ? "disabled" : ""}>${done ? "✓ 今天做到了" : "我做到了"}</button></div></div>`); }
-/* ---- 今天的牌桌: your real travel buddies, not 小林 and Q ---- */
+/* ---- 今天的牌桌: your real travel buddies ---- */
 
 document.addEventListener("click", e => { const b = e.target.closest('[data-act="skills"]'); if(!b) return; setTimeout(() => { const o = $("ov-x"); if(!o) return; const h2 = [...o.querySelectorAll(".sec h2")].find(x => x.textContent.includes("今天的牌桌")); if(h2) h2.closest(".sec").outerHTML = deckTableHTML(); }, 0); });
 /* ---- 猜价格: a little click as you drag ---- */
@@ -2252,7 +2236,7 @@ const okCheckins = () => S.checkins.filter(c => !c.status || c.status === "ok");
 function others(){ return FRIENDS.filter((f, i) => i > 0 && f[3] && !String(f[3]).startsWith("n:")).length; }
 document.addEventListener("click", e => { const b = e.target.closest('[data-act="cksend"]'); if(!b || others() < 1) return; e.stopImmediatePropagation();
   const it = DAYS[CK.di].items[CK.ii], c = DAYCFG[CK.di], photo = (ckPics()[CK.pic]) || ""; if(S.checkins.some(x => x.di === CK.di && x.ii === CK.ii && x.status === "pending")) return toast("这里已经在等旅伴确认了");
-  S.checkins.push({ id:uid8(), u:Date.now(), di:CK.di, ii:CK.ii, title:it.title, city:c.city, date:TDATE(), at:new Date().toTimeString().slice(0, 5), photo, mood:0, status:"pending", byId:MEID(), byName:S.me || "我" });
+  S.checkins.push({ ink: CK.ink || .85, id: it.id || uid8(), iid: it.id, u:Date.now(), di:CK.di, ii:CK.ii, title:it.title, city:c.city, date:TDATE(), at:new Date().toTimeString().slice(0, 5), photo, mood:0, status:"pending", byId:MEID(), byName:S.me || "我" });
   FEED.unshift({ a:0, t:`${S.me || "我"} 在「${it.title}」打卡了，等你确认`, s:`${c.city} · 打卡`, ic:"pin", by:S.me || "我", at:Date.now() }); notifyRoom(`${S.me || "我"} 在「${it.title}」打卡了，等你确认`, "checkin");
   sheet(`<h3>发给旅伴了</h3><p class="sub">${NAMES.slice(1).join("、")} 确认以后，就会盖章进护照</p>${photo ? `<div class="capprev"><img src="${photo}" alt=""></div>` : ""}<div style="margin-top:12px"><button class="cbtn" data-act="close2">好</button></div>`); snd("paper"); refreshDerived(); }, true);
 function pendingForMe(){ return S.checkins.filter(c => c.status === "pending" && c.byId !== MEID()); }
@@ -2329,7 +2313,7 @@ setTimeout(() => { const a = S.fx && S.fx.atmos; if(a && a.day === TDATE() && !a
 function todaySpend(){ return EXP.filter(e => e.at === TDATE()).reduce((n, e) => n + myShare(e), 0); }
 
 fi = 0; drawFortune(); setTimeout(() => { if(!window.TD_BOOTED) bootTrip(); }, 1200);
-document.querySelectorAll("[id=sdate]").forEach(t => t.textContent = "NOV 4 · WED");
+{ const d = new Date(); document.querySelectorAll("[id=sdate]").forEach(t => t.textContent = `${"JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split(" ")[d.getMonth()]} ${d.getDate()} · ${"SUN MON TUE WED THU FRI SAT".split(" ")[d.getDay()]}`); }
 
 /* ===================== trip dates: move the trip, add days, or shorten it ===================== */
 let DT = null;
@@ -2689,3 +2673,264 @@ function h0(s){ return (s.h || 800) * .45; }
 
 /* the "how many days" stepper on the start sheets (from a city guide, or a blank book) */
 document.addEventListener("click", e => { const b = e.target.closest('[data-act^="ntd:"]'); if(!b) return; NT.days = Math.max(1, Math.min(30, NT.days + +b.dataset.act.split(":")[1])); const el = $("ntdays"); if(el){ el.textContent = NT.days; el.animate([{ scale:1.3 }, { scale:1 }], { duration:220 }); } });
+
+document.addEventListener("click", e => { const b = e.target.closest('[data-act="aeshowreal"]'); if(!b) return; AE.showReal = true; renderAE(); setTimeout(() => { const i = $("aereal"); i && i.focus(); }, 60); });
+
+/* the day's stops in itinerary order, numbered 1, 2, 3 … (only places that are on the map) */
+function mapOrder(di){ const out = {}, d = DAYS[di]; if(!d) return out; let k = 0; d.items.forEach(it => { const g = GEO.find(g => g[0] === it.title || it.title.includes(g[0]) || g[0].includes(it.title.replace(/ · .*/, ""))); if(g && !out[g[0]]) out[g[0]] = ++k; }); return out; }
+
+/* no 3D (offline, or the library didn't load): a flat paper roll does the same job */
+function flatTear(){ const gl = $("gl"); if(!gl || $("tflat")) return; gl.insertAdjacentHTML("afterend", `<div class="tflat" id="tflat" aria-hidden="true"><div class="tf-roll"></div><div class="tf-tk"><small>FOOD TICKET</small><b class="tf-food">${tcity.food}</b><span class="tf-city">${tcity.name}</span></div></div>`); const h = $("thint"); if(h) h.textContent = "拉出一张，撕下来收进票夹"; }
+
+/* ===================== 邮票册：每一个打卡都是一枚有齿孔的邮票 ===================== */
+let SA = { sel:null, lay:"pile", tab:"all" };
+const SA_MOOD = ["—", "平静", "还不错", "开心", "很开心", "难忘"];
+function saStamps(){ const L = okCheckins().slice().sort((a, b) => (a.date + (a.at || "")).localeCompare(b.date + (b.at || ""))); return L.map((c, i) => ({ c, no:i + 1 })); }
+function saColor(city){ const c = (CITIES || []).find(x => x.name === city); return `color-mix(in srgb, ${(c && c.color) || "#C8553D"} 72%, #1B1A2E)`; }
+function saKind(c){ const it = (DAYS[c.di] && DAYS[c.di].items[c.ii]) || {}; return it.kind === "food" ? "bowl" : it.kind === "lodging" ? "bed" : it.kind === "transit" ? "bus" : "pin"; }
+function saFace({ c, no }){ const en = (cityEn(c.city) || "").toUpperCase(), d = c.date || "", k3 = no % 3, v = c.photo ? (k3 === 0 ? "type" : "photo") : (no % 2 ? "type" : "line"), name = String(c.title).replace(/ · .*/, ""), big = [d.slice(5).replace("-", "."), (c.at || "").slice(0, 5) || d.slice(5).replace("-", "."), `D${pad(c.di + 1)}`, String(c.city || "旅").slice(0, 1)][Math.floor(no / 3) % 4];
+  if(v === "photo") return [v, `<span class="sa-ph" style="background-image:url('${c.photo}')"></span><span class="sa-den">${pad(c.di + 1)}</span><span class="sa-en">${en}</span>`];
+  if(v === "line") return [v, `<span class="sa-lines"></span><span class="sa-ico">${I(saKind(c), 30, 1.6)}</span><span class="sa-nm">${name.slice(0, 6)}</span><span class="sa-yr">${d.slice(0, 4)}</span>`];
+  return [v, `<span class="sa-top">TRIP DECK · ${en.slice(0, 10)}</span><span class="sa-star">✳</span><span class="sa-big${big.length === 1 ? " seal" : ""}">${big}</span><span class="sa-nm">${name.slice(0, 7)}</span><span class="sa-yr">${c.city} · ${d.slice(0, 4)}</span>`]; }
+function stampAlbumHTML(){ const all = saStamps(), cities = [...new Set(all.map(x => x.c.city))], list = SA.tab === "all" ? all : all.filter(x => x.c.city === SA.tab);
+  if(SA.sel != null && !list.some(x => x.no === SA.sel)) SA.sel = null;
+  const sel = list.find(x => x.no === SA.sel);
+  const tabs = `<div class="sa-tabs">${[["all", "全部", "#8A8478"], ...cities.map(n => [n, n, saColor(n)])].map(([k, n, col]) => `<button data-act="satab:${k}" aria-pressed="${SA.tab === k}" style="--c:${col}">${n}</button>`).join("")}</div>`;
+  const board = list.length ? list.map(x => { const [v, face] = saFace(x); return `<button data-cid="${escT(x.c.id || x.no)}" class="sa-st v-${v}${SA.sel === x.no ? " on" : ""}${S.fx && S.fx.grey && x.c.date === TDATE() ? " grey" : ""}" data-act="sapick:${x.no}" data-no="${x.no}" style="--c:${saColor(x.c.city)}; --ink:${x.c.ink != null ? x.c.ink : 1}" aria-label="第 ${x.no} 枚邮票：${x.c.title}"><span class="sa-in">${face}</span></button>`; }).join("")
+    : `<div class="sa-empty"><span class="sa-ghost"></span><p>去打卡，<br>这里就会长出邮票</p></div>`;
+  const detail = sel ? (() => { const c = sel.c, it = (DAYS[c.di] && DAYS[c.di].items[c.ii]) || {}; const rows = [["城市", c.city], ["日期", (c.date || "").replace(/-/g, ".")], ["时间", c.at || "—"], ["第几天", `D${pad(c.di + 1)} · ${(DAYCFG[c.di] || {}).place || ""}`], ["类型", { sight:"景点", food:"美食", lodging:"住宿", transit:"交通" }[it.kind] || "地方"], ["打卡的人", c.byName || S.me || "我"], ["确认的人", c.confirmBy || (c.byName && c.byName !== (S.me || "我") ? "—" : "自己盖的章")], ["心情", SA_MOOD[c.mood || 0] || "—"], ["编号", `No.${String(sel.no).padStart(3, "0")}`]];
+      return `<div class="sa-card"><small>${(cityEn(c.city) || "").toUpperCase()} · 第 ${sel.no} 枚</small><h3>${c.title}</h3><p>这枚邮票，是你们在 ${c.city} 的第 ${c.di + 1} 天，${c.at ? c.at + " " : ""}盖下的。</p><dl>${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>${it.title ? `<button class="chip" data-act="place:${c.di}:${c.ii}">看这个地方</button>` : ""}</div>`; })()
+    : (list.length ? `<div class="sa-hint"><span class="sa-ghost small"></span><p>点一枚邮票，<br>看看它的故事</p></div>` : "");
+  return `<div class="sa"><div class="sa-page">${tabs}<div class="sa-ctl"><button data-act="salay:grid" aria-pressed="${SA.lay === "grid"}">${I("grid", 14, 2)} 整理</button><button data-act="salay:pile" aria-pressed="${SA.lay === "pile"}">✳ 打乱</button><button data-act="salay:free" aria-pressed="${SA.lay === "free"}">✋ 自由摆</button></div>
+    <div class="sa-board${SA.lay === "free" ? " free" : ""}" id="saboard">${board}</div>${SA.lay === "free" && list.length ? `<p class="sa-tip">用手指把邮票拖到喜欢的地方，会记住</p>` : ""}
+    <div class="sa-foot"><span>MINI ARCHIVE · ${list.length} 枚</span><span>${sel ? `No.${String(sel.no).padStart(3, "0")}` : ""}${list.length > 1 ? `<button data-act="sanav:-1" aria-label="上一枚">‹</button><button data-act="sanav:1" aria-label="下一枚">›</button>` : ""}</span></div></div>${detail}</div>`; }
+/* where each stamp sits: a loose pile, or tidy rows */
+function saLayout(){ const b = $("saboard"); if(!b) return; const st = [...b.querySelectorAll(".sa-st")], W = b.clientWidth, n = st.length;
+  if(SA.lay === "free"){ const P = S.saPos || (S.saPos = {}), cols = Math.max(2, Math.floor((W + 12) / 112)), gap = cols > 1 ? (W - 100) / (cols - 1) : 0;
+    const H = Math.max(440, Math.ceil(n / cols) * 140 + 40, ...st.map(el => ((P[el.dataset.cid] || {}).y || 0) + 140)); b.style.height = H + "px";
+    st.forEach((el, i) => { const p = P[el.dataset.cid], x = p ? p.x * W : (i % cols) * gap + (((i * 37) % 9) - 4), y = p ? p.y : Math.floor(i / cols) * 140 + 12 + ((i * 53) % 11), r = p ? p.r : ((i * 53) % 13) - 6;
+      el.style.setProperty("--x", Math.max(0, Math.min(W - 100, x)) + "px"); el.style.setProperty("--y", Math.max(0, Math.min(H - 124, y)) + "px"); el.style.setProperty("--r", r + "deg"); if(p && p.z) el.style.zIndex = p.z; }); return; }
+  if(SA.lay === "grid"){ const cols = W > 340 ? 3 : 2, cw = W / cols; st.forEach((el, i) => { const r = Math.floor(i / cols), k = i % cols; el.style.setProperty("--x", (k * cw + cw / 2 - 50) + "px"); el.style.setProperty("--y", (r * 148 + 18) + "px"); el.style.setProperty("--r", "0deg"); }); b.style.height = (Math.ceil(n / cols) * 148 + 30) + "px"; }
+  else { const rnd = k => { const x = Math.sin(k * 99.13) * 43758.5453; return x - Math.floor(x); }, H = Math.max(380, 300 + Math.min(n, 16) * 8); b.style.height = H + "px";
+    st.forEach((el, i) => { const no = +el.dataset.no, a = i * 2.39996 + rnd(no) * .6, f = n < 2 ? 0 : Math.sqrt((i + .5) / n), rx = Math.min(W / 2 - 58, 150), ry = H / 2 - 74;
+      el.style.setProperty("--x", Math.max(0, Math.min(W - 100, W / 2 - 50 + Math.cos(a) * rx * f + (rnd(no + 1) - .5) * 24)) + "px"); el.style.setProperty("--y", Math.max(0, Math.min(H - 124, H / 2 - 62 + Math.sin(a) * ry * f + (rnd(no + 7) - .5) * 24)) + "px"); el.style.setProperty("--r", ((rnd(no + 3) - .5) * 28).toFixed(1) + "deg"); }); } }
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if(!b) return; const [a, x] = b.dataset.act.split(":"); if(!["sapick", "satab", "salay", "sanav"].includes(a)) return;
+  if(a === "sapick"){ SA.sel = SA.sel === +x ? null : +x; snd(SA.sel ? "stamp" : "tap"); buzz(6); }
+  else if(a === "satab"){ SA.tab = b.dataset.act.slice(6); SA.sel = null; snd("tap"); }
+  else if(a === "salay"){ SA.lay = x; snd("shuffle"); }
+  else if(a === "sanav"){ const L = saStamps().filter(s => SA.tab === "all" || s.c.city === SA.tab).map(s => s.no); if(!L.length) return; const i = L.indexOf(SA.sel); SA.sel = L[(i < 0 ? 0 : i + +x + L.length) % L.length]; snd("tap"); }
+  NOSTAG = true; render(); });
+window.addEventListener("resize", () => { if(S.tab === "book" && S.seg === "stamps") saLayout(); });
+
+document.addEventListener("pointerdown", e => { const b = e.target.closest(".sa-st.grey"); if(!b) return; const t = setTimeout(() => { if(S.fx) S.fx.grey = false; toast("颜色回来了"); snd("success"); buzz([10, 30, 10]); NOSTAG = true; render(); }, 2000); const stop = () => { clearTimeout(t); document.removeEventListener("pointerup", stop); document.removeEventListener("pointercancel", stop); }; document.addEventListener("pointerup", stop); document.addEventListener("pointercancel", stop); });
+
+/* "24.4467, 118.0662", "24.4467 118.0662", or a Google Maps link with @lat,lng / q=lat,lng */
+function parseLL(v){ const t = String(v || "").trim(); if(!t) return null; const m = t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || t.match(/[?&](?:q|query|ll)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || t.match(/^(-?\d{1,2}\.\d+)\s*[,，\s]\s*(-?\d{1,3}\.\d+)$/);
+  if(!m) return null; const la = +m[1], lo = +m[2]; return Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? [la, lo] : null; }
+
+/* emergency numbers by country, and where you sleep tonight (from your own itinerary) */
+const SOS_NUM = { 中国:[["110","报警"],["120","急救"],["119","火警"],["122","交通事故"]], 马来西亚:[["999","报警 / 急救"],["994","火警"],["112","手机紧急电话"]], 新加坡:[["999","报警"],["995","急救 / 火警"]],
+  泰国:[["191","报警"],["1669","急救"],["199","火警"],["1155","旅游警察（会说英语）"]], 日本:[["110","报警"],["119","急救 / 火警"]], 韩国:[["112","报警"],["119","急救 / 火警"],["1330","旅游热线（有中文）"]],
+  台湾:[["110","报警"],["119","急救 / 火警"]], 香港:[["999","报警 / 急救 / 火警"]], 澳门:[["999","报警 / 急救 / 火警"]], 越南:[["113","报警"],["115","急救"],["114","火警"]], 印度尼西亚:[["110","报警"],["118","急救"],["113","火警"]], 新西兰:[["111","报警 / 急救 / 火警"]] };
+function sosCountry(){ const city = (DAYCFG[TODAY] || {}).city, g = (TRIP.guides || []).find(x => x.name === city) || (TRIP.guides || [])[0]; return g ? g.country : ""; }
+function tonightStay(){ for(let d = Math.min(TODAY, DAYS.length - 1); d >= 0; d--){ const it = (DAYS[d].items || []).slice().reverse().find(i => i.kind === "lodging"); if(it) return it; } return null; }
+
+const CUR_CN = { CNY:"人民币", MYR:"马币", SGD:"新币", THB:"泰铢", JPY:"日元", KRW:"韩元", TWD:"新台币", HKD:"港币", MOP:"澳门币", VND:"越南盾", IDR:"印尼盾", USD:"美元", EUR:"欧元", GBP:"英镑", AUD:"澳币", NZD:"纽币" };
+function inChina(){ return sosCountry() === "中国"; }
+
+/* ===================== 一趟旅行好几个城市：按顺序，每个城市几天；默认每天空着，你自己排 ===================== */
+const escT = v => String(v).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[ch]));
+function ntPickHTML(){ return `<label for="ntq" style="position:absolute; left:-9999px">搜城市</label><input class="dinput" id="ntq" placeholder="搜城市，或直接打名字：怡保、新山…" autocomplete="off" style="margin-top:10px"><div class="citylist" id="citylist">${cityListHTML()}</div>`; }
+function ntListHTML(){ const L = NT.list || []; if(!L.length) return `<p class="nt-empty">还没选城市。在下面搜一个，点一下就加进来；可以加好几个，会按顺序走。</p>`;
+  const total = L.reduce((n, c) => n + c.days, 0), from = NT.mode === "add" ? addDays(TRIP.end, 1) : (($("ntdate") || {}).value || NT.start);
+  return L.map((c, i) => `<div class="ntrow"><span class="ntno">${i + 1}</span><span class="ntname"><b>${escT(c.name)}</b>${c.id ? "" : `<small>自己排</small>`}</span><span class="step sm"><button data-act="ntcd:${i}:-1" aria-label="${escT(c.name)} 少一天">−</button><b>${c.days}</b><button data-act="ntcd:${i}:1" aria-label="${escT(c.name)} 多一天">+</button></span><span class="ntu">天</span><button class="ntx" data-act="ntcx:${i}" aria-label="拿掉 ${escT(c.name)}">×</button></div>`).join("")
+    + `<p class="nt-sum">一共 ${total} 天 · ${md(from)} — ${md(addDays(from, total - 1))}</p>`; }
+function ntPlanHTML(){ return `<button class="ntplan" data-act="ntplan" role="switch" aria-checked="${!!NT.plan}"><span class="tx"><b>帮我排一个参考行程</b><small>${NT.plan ? "会用城市资料先把每天排好，之后都可以改、可以删" : "关着：每天先空着，你自己加。加的时候会列出那个城市的景点和美食给你挑"}</small></span><span class="nsw"></span></button>`; }
+function ntRefresh(){ const l = $("ntlist"); l && (l.innerHTML = ntListHTML()); const c = $("citylist"); c && (c.innerHTML = cityListHTML()); const q = $("ntq"); if(q && !NT.q) q.value = ""; }
+function cityDays(list, start, plan, offset){ const days = [], ids = []; let d = offset || 0;
+  list.forEach(c => { const g = c.id ? O.GUIDE_BY_ID[c.id] : null; if(g && !ids.includes(g.id)) ids.push(g.id); const P = g && plan ? makePlan(g, c.days) : [];
+    for(let k = 0; k < c.days; k++, d++){ const items = P[k] || []; days.push({ date:addDays(start, d), city:c.name, title:(items[0] || {}).title || "", items }); } });
+  return { days, ids }; }
+function tripFromCities(list, start, plan){ const { days, ids } = cityDays(list, start, plan, 0);
+  return { name:list.map(c => c.name).join(" · "), start, end:addDays(start, days.length - 1), budget:4000, currency:"MYR", cities:ids, source:plan ? "guide" : "blank", days, prepaid:[], checklist:GENERIC_CHECK }; }
+function addCitySheet(){ if(!DAYS.length) return; NT.q = ""; NT.mode = "add"; NT.list = []; NT.plan = false;
+  sheet(`<h3>加一个城市</h3><p class="sub">接在行程最后面（${md(TRIP.end)} 之后），比如怡保玩完去吉隆坡</p><div id="ntlist">${ntListHTML()}</div>${ntPickHTML()}${ntPlanHTML()}
+    <div style="margin-top:16px"><button class="cbtn" data-act="addcitygo">加进行程</button></div>`); }
+function appendCities(){ const L = NT.list || []; if(!L.length) return toast("先选一个城市"); const bk = BOOKS2.find(x => x.id === S.curBook); if(!bk || !bk.trip) return;
+  tripBack(); stashBook(bk.id); const T = bk.trip; const { days, ids } = cityDays(L, T.start, NT.plan, T.days.length);
+  T.days = T.days.concat(days); T.cities = [...new Set([...(T.cities || []), ...ids])]; T.end = addDays(T.start, T.days.length - 1); bk.end = T.end;
+  applyTrip(T); restoreBook(bk.id); closeSheet(); S.tab = "trip"; S.tday = DAYS.length - days.length; NOSTAG = true; render(); toast(`加了 ${L.map(c => c.name).join(" → ")} · 现在一共 ${DAYS.length} 天`); snd("success"); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if(!b) return; const p = b.dataset.act.split(":"), a = p[0];
+  if(a === "addcity") addCitySheet();
+  else if(a === "addcitygo") appendCities();
+  else if(a === "ntcd"){ const c = (NT.list || [])[+p[1]]; if(c){ c.days = Math.max(1, Math.min(30, c.days + +p[2])); ntRefresh(); } }
+  else if(a === "ntcx"){ (NT.list || []).splice(+p[1], 1); ntRefresh(); }
+  else if(a === "ntcustom"){ const n = NT.q.trim().slice(0, 16); if(!n) return; if(NT.mode === "day"){ NT.dayCity = { id:"", name:n }; NT.q = ""; dcRefresh(); return; } (NT.list || (NT.list = [])).push({ id:"", name:n, days:2 }); NT.q = ""; ntRefresh(); snd("tap"); }
+  else if(a === "ntplan"){ NT.plan = !NT.plan; b.outerHTML = ntPlanHTML(); snd("tap"); } });
+document.addEventListener("change", e => { if(e.target.id === "ntdate"){ NT.start = e.target.value; const l = $("ntlist"); l && (l.innerHTML = ntListHTML()); } });
+
+/* ===================== 照片票根：点一下弹出来看，可以存成图片 ===================== */
+let SP = -1;
+function openStubPop(i){ if(!S.stubs[i]) return; SP = i; let el = $("stubpop"); if(!el){ el = document.createElement("div"); el.id = "stubpop"; el.className = "stubpop"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); document.getElementById("app").appendChild(el); }
+  const st = S.stubs[i], n = S.stubs.length;
+  el.innerHTML = `<button class="sp-x" data-act="spclose" aria-label="关掉">×</button><div class="sp-stage"><div class="sp-card${st.layout === "v" ? " v" : ""}" id="spcard"><div class="sp-flip" id="spflip"><div class="sp-front">${stubHTML(st, false)}</div><div class="sp-back">${stubBackHTML(st)}</div></div></div></div>
+    <div class="sp-meta">${escT(st.zh || "")}${st.no ? ` · ${escT(st.no)}` : ""}${n > 1 ? ` · ${i + 1} / ${n}` : ""}</div>
+    <div class="sp-tools"><button class="chip sp-adj" data-act="spedit">${I("grid", 14)} 调整</button><button class="chip sp-adj" data-act="spflip">✎ 翻面写字</button><button class="chip sp-adj" data-act="spremix" aria-label="换个样子">🎲 换个样子</button></div><div class="sp-bar">${n > 1 ? `<button class="sp-nav" data-act="spnav:-1" aria-label="上一张">‹</button>` : ""}<button class="cbtn sp-dl" data-act="stubdl:${i}">${I("plus", 16, 2)} 存成图片</button>${n > 1 ? `<button class="sp-nav" data-act="spnav:1" aria-label="下一张">›</button>` : ""}</div>`;
+  el.classList.remove("out"); el.classList.add("on"); stubShake(true); const c = $("spcard"); if(c && typeof bindTiltEl === "function") bindTiltEl(c, 8); snd("paper"); buzz(6); }
+function closeStubPop(){ stubShake(false); const el = $("stubpop"); if(!el || !el.classList.contains("on")) return; el.classList.add("out"); setTimeout(() => { el.classList.remove("on", "out"); el.innerHTML = ""; }, 260); SP = -1; }
+document.addEventListener("click", e => { const pop = $("stubpop");
+  if(pop && pop.classList.contains("on")){ const b = e.target.closest("[data-act]"); if(b && b.dataset.act === "spclose") return closeStubPop(); const [a, x] = b ? b.dataset.act.split(":") : []; if(a === "spnav"){ const n = S.stubs.length; return openStubPop((SP + +x + n) % n); } if(e.target === pop || e.target.classList.contains("sp-stage")) return closeStubPop(); return; }
+  const w = e.target.closest(".stubwrap"); if(w && !e.target.closest(".stubdl") && w.dataset.stub != null) openStubPop(+w.dataset.stub); });
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeStubPop(); });
+{ let y0 = null; document.addEventListener("touchstart", e => { const p = $("stubpop"); y0 = p && p.classList.contains("on") ? e.touches[0].clientY : null; }, { passive:true });
+  document.addEventListener("touchend", e => { if(y0 != null && e.changedTouches[0].clientY - y0 > 110) closeStubPop(); y0 = null; }, { passive:true }); }
+
+/* ---- the city you're in today (for food tickets and anything else "local") ---- */
+function todayCity(){ const n = (DAYCFG[TODAY] || {}).city; return CITIES.find(c => c.name === n) || null; }
+/* ---- change which city a day is in (and optionally the days after it) ---- */
+function dayCitySheet(di){ if(!DAYS[di]) return; NT.mode = "day"; NT.q = ""; NT.dayDi = di; NT.dayCity = null; const here = [...new Set(DAYS.map(d => d.city).filter(Boolean))];
+  sheet(`<h3>D${pad(di + 1)} 在哪个城市</h3><p class="sub">${md(DAYS[di].date)} · 现在是 ${escT(DAYS[di].city || "—")}。这天的安排会留着，你自己决定要不要删。</p>
+    <div class="pick" style="margin-top:10px">${here.map(n => `<button class="chip${n === DAYS[di].city ? " on" : ""}" data-act="dcpick:${escT(n)}">${escT(n)}</button>`).join("")}</div>
+    <div id="dcsel"></div>${ntPickHTML()}`); dcRefresh(); }
+function dcRefresh(){ const el = $("dcsel"); if(!el) return; const c = NT.dayCity, di = NT.dayDi, old = (DAYS[di] || {}).city; let n = 0; for(let d = di; d < DAYS.length && DAYS[d].city === old; d++) n++;
+  el.innerHTML = c ? `<div class="dc-go"><p>改成 <b>${escT(c.name)}</b></p><button class="cbtn" data-act="dcgo:one">只改 D${pad(di + 1)} 这一天</button>${n > 1 ? `<button class="cbtn ghost" data-act="dcgo:rest">D${pad(di + 1)} 到 D${pad(di + n)} 都改（原本在 ${escT(old)} 的 ${n} 天）</button>` : ""}</div>` : "";
+  const q = $("ntq"); if(q && !NT.q) q.value = ""; const l = $("citylist"); l && (l.innerHTML = cityListHTML()); }
+function setDayCity(rest){ const c = NT.dayCity, di = NT.dayDi, bk = BOOKS2.find(x => x.id === S.curBook); if(!c || !bk || !bk.trip || !DAYS[di]) return;
+  tripBack(); stashBook(bk.id); const T = bk.trip, old = T.days[di].city; let n = 0;
+  for(let d = di; d < T.days.length && (d === di || (rest && T.days[d].city === old)); d++){ T.days[d].city = c.name; n++; }
+  if(c.id && !(T.cities || []).includes(c.id)) T.cities = [...(T.cities || []), c.id];
+  applyTrip(T); restoreBook(bk.id); closeSheet(); NOSTAG = true; render(); toast(n > 1 ? `D${pad(di + 1)} 起 ${n} 天改成 ${c.name}` : `D${pad(di + 1)} 改成 ${c.name}`); snd("success"); }
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if(!b) return; const p = b.dataset.act.split(":"), a = p[0];
+  if(a === "daycity") dayCitySheet(+p[1]);
+  else if(a === "dcpick"){ const n = b.dataset.act.slice(7), g = GUIDE().find(x => x.name === n); NT.dayCity = { id:g ? g.id : "", name:n }; dcRefresh(); snd("tap"); }
+  else if(a === "dcgo") setDayCity(p[1] === "rest"); });
+
+/* ===================== 照片票根：拖动 / 放大照片，五种色调，偶尔一张闪卡 ===================== */
+const STUB_FX = { none:["原色", ""], film:["胶片", "contrast(1.08) saturate(1.15) sepia(.18)"], bw:["黑白", "grayscale(1) contrast(1.12)"], warm:["暖阳", "sepia(.3) saturate(1.3) brightness(1.04)"], fade:["褪色", "saturate(.6) brightness(1.1) contrast(.88)"] };
+function stubImgStyle(st){ const c = st.crop || { x:50, y:50, z:1 }, f = (STUB_FX[st.fx] || [])[1]; return `object-position:${c.x}% ${c.y}%; transform-origin:${c.x}% ${c.y}%; transform:scale(${c.z || 1});${f ? ` filter:${f};` : ""}`; }
+function holoRoll(){ const h = Math.random() < .125; if(h) setTimeout(() => { toast("✨ 这一张是闪卡！"); snd("success"); buzz([10, 40, 10]); }, 1700); return h; }
+/* drag to move the photo inside its frame, pinch (or the slider) to zoom */
+function cropBind(box, cr){ const img = box.querySelector("img"); if(!img || box._crop) return; box._crop = true; box.classList.add("cropping"); const pts = new Map(); let st0 = null;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), apply = () => { img.style.objectPosition = `${cr.x}% ${cr.y}%`; img.style.transformOrigin = `${cr.x}% ${cr.y}%`; img.style.transform = `scale(${cr.z})`; };
+  const snap = () => { st0 = { x:cr.x, y:cr.y, z:cr.z, p:[...pts.values()].map(p => p.slice()) }; };
+  box.addEventListener("pointerdown", e => { e.preventDefault(); try{ box.setPointerCapture(e.pointerId); }catch(err){} pts.set(e.pointerId, [e.clientX, e.clientY]); snap(); });
+  box.addEventListener("pointermove", e => { if(!pts.has(e.pointerId) || !st0) return; pts.set(e.pointerId, [e.clientX, e.clientY]); const r = box.getBoundingClientRect(), P = [...pts.values()];
+    if(P.length === 1 && st0.p.length === 1){ cr.x = clamp(st0.x - (P[0][0] - st0.p[0][0]) / r.width * 140 / cr.z, 0, 100); cr.y = clamp(st0.y - (P[0][1] - st0.p[0][1]) / r.height * 140 / cr.z, 0, 100); }
+    else if(P.length >= 2 && st0.p.length >= 2){ const d0 = Math.hypot(st0.p[0][0] - st0.p[1][0], st0.p[0][1] - st0.p[1][1]), d1 = Math.hypot(P[0][0] - P[1][0], P[0][1] - P[1][1]); cr.z = clamp(st0.z * d1 / Math.max(1, d0), 1, 3); const zz = $("smzoom") || $("spzoom"); zz && (zz.value = cr.z); }
+    apply(); });
+  const end = e => { pts.delete(e.pointerId); snap(); }; box.addEventListener("pointerup", end); box.addEventListener("pointercancel", end); apply(); }
+document.addEventListener("input", e => { if(e.target.id === "smzoom" && SM.crop){ SM.crop.z = +e.target.value; const img = document.querySelector("#smprev .p img, #smprev .ph2 img"); img && (img.style.transform = `scale(${SM.crop.z})`); }
+  if(e.target.id === "spzoom" && SPE){ SPE.crop.z = +e.target.value; const img = document.querySelector("#spcard .p img, #spcard .ph2 img"); img && (img.style.transform = `scale(${SPE.crop.z})`); } });
+document.addEventListener("click", e => { const b = e.target.closest("[data-act]"); if(!b) return; const [a, x] = b.dataset.act.split(":");
+  if(a === "smreset"){ SM.crop = { x:50, y:50, z:1 }; const zz = $("smzoom"); zz && (zz.value = 1); smPreview(); }
+  else if(a === "smfx"){ SM.fx = x; document.querySelectorAll('[data-act^="smfx:"]').forEach(c => c.classList.toggle("on", c === b)); smPreview(); snd("tap"); }
+  else if(a === "spedit") stubEdit(true);
+  else if(a === "spfx" && SPE){ SPE.fx = x; document.querySelectorAll('[data-act^="spfx:"]').forEach(c => c.classList.toggle("on", c === b)); const img = document.querySelector("#spcard .p img, #spcard .ph2 img"); if(img) img.style.filter = (STUB_FX[x] || [])[1] || ""; snd("tap"); }
+  else if(a === "spdone") stubEdit(false, true);
+  else if(a === "spcancel") stubEdit(false, false); });
+/* adjust a stub you already made, inside the pop-out */
+let SPE = null;
+function stubEdit(on, save){ const st = S.stubs[SP]; if(!st) return;
+  if(on){ SPE = { crop:{ ...(st.crop || { x:50, y:50, z:1 }) }, fx:st.fx || "none" }; const card = $("spcard"); if(!card) return; const fresh = card.cloneNode(false); card.replaceWith(fresh); fresh.innerHTML = `<div class="sp-flip"><div class="sp-front">${stubHTML({ ...st, crop:SPE.crop, fx:SPE.fx }, false)}</div></div>`; fresh.classList.add("editing"); fresh.style.transform = "";
+    const box = fresh.querySelector(".p, .ph2"); box && cropBind(box, SPE.crop);
+    const tl = document.querySelector(".sp-tools"); if(tl) tl.style.display = "none"; const bar = document.querySelector(".sp-bar"); if(bar) bar.innerHTML = `<div class="sp-edit"><div class="smcrop"><span>${I("grid", 13)} 拖动照片调位置</span><input type="range" id="spzoom" min="1" max="3" step="0.01" value="${SPE.crop.z}" aria-label="放大缩小"></div><div class="smfx">${Object.entries(STUB_FX).map(([k, [n]]) => `<button class="chip${SPE.fx === k ? " on" : ""}" data-act="spfx:${k}">${n}</button>`).join("")}</div><div style="display:flex; gap:10px"><button class="cbtn ghost" data-act="spcancel">取消</button><button class="cbtn" data-act="spdone">好了</button></div></div>`;
+    return; }
+  if(save && SPE){ st.crop = SPE.crop; st.fx = SPE.fx; toast("票根调好了"); snd("stamp"); NOSTAG = true; render(); }
+  const i = SP; SPE = null; openStubPop(i); }
+
+/* a round postmark: city, date and wavy cancel lines */
+function postmarkSVG(st){ const d = st.pmd || TDATE(), en = escT(String(st.en || "TRIP").toUpperCase().slice(0, 14)), ink = "#24242C";
+  const shapes = `<circle cx="60" cy="60" r="46"/><circle cx="60" cy="60" r="37"/><path d="M112 44 q10 -7 20 0 t20 0 t20 0 t20 0 M112 60 q10 -7 20 0 t20 0 t20 0 t20 0 M112 76 q10 -7 20 0 t20 0 t20 0 t20 0"/>`;
+  const words = (col, extra) => `<g transform="rotate(-12 60 60)" fill="${col}" font-family="-apple-system, Helvetica, Arial, sans-serif" text-anchor="middle" ${extra}><text x="60" y="38" font-size="10" font-weight="700" letter-spacing="1.5">${en}</text><text x="60" y="66" font-size="17" font-weight="800">${d.slice(5).replace("-", ".")}</text><text x="60" y="86" font-size="10" letter-spacing="2">${d.slice(0, 4)}</text></g>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120"><g transform="rotate(-12 60 60)" fill="none" stroke="#fff" stroke-width="6" opacity=".55">${shapes}</g>${words("#fff", 'stroke="#fff" stroke-width="3.5" opacity=".55"')}<g transform="rotate(-12 60 60)" fill="none" stroke="${ink}" stroke-width="2.6" opacity=".88">${shapes}</g>${words(ink, 'opacity=".9"')}</svg>`; }
+document.addEventListener("click", e => { const b = e.target.closest('[data-act="smpm"]'); if(!b) return; SM.pm = !SM.pm; b.classList.toggle("on", SM.pm); smPreview(); snd("stamp"); buzz(8); });
+
+/* ===================== 票根背面：翻过去，写一句只有你看得到的话 ===================== */
+function stubBackHTML(st){ return `<div class="sb-paper"><small>BACK · ${escT(st.zh || "")} · ${escT(st.date || "")}</small><textarea id="spnote" maxlength="120" placeholder="在背面写一句，只有你看得到…" aria-label="票根背面">${escT(st.note || "")}</textarea><span class="sb-no">${escT(st.no || "")}</span></div>`; }
+document.addEventListener("click", e => { const b = e.target.closest('[data-act="spflip"]'); if(!b) return; const f = $("spflip"); if(!f) return; const on = !f.classList.contains("flipped");
+  f.classList.toggle("flipped", on); const card = $("spcard"); if(card){ card.style.transform = ""; card.classList.toggle("noTilt", on); }
+  b.innerHTML = on ? "↺ 翻回来" : "✎ 翻面写字"; snd("flip"); buzz(8);
+  if(on) setTimeout(() => { const t = $("spnote"); t && t.focus(); }, 650); else { const st = S.stubs[SP]; if(st && st.note) toast("背面写好了，只有你看得到"); NOSTAG = true; render(); } });
+document.addEventListener("input", e => { if(e.target.id !== "spnote") return; const st = S.stubs[SP]; if(st) st.note = e.target.value.trim(); });
+/* tilt stays off while the card is flipped */
+document.addEventListener("pointermove", e => { const c = e.target.closest && e.target.closest("#spcard.noTilt"); if(c){ e.stopPropagation(); c.style.transform = ""; } }, true);
+
+/* ===================== 邮票册「自由摆」：拖到哪里就留在哪里 ===================== */
+{ let drag = null, zTop = 50;
+  document.addEventListener("pointerdown", e => { const el = e.target.closest(".sa-board.free .sa-st"); if(!el) return; const b = $("saboard"), r = b.getBoundingClientRect();
+    drag = { el, b, r, sx:e.clientX, sy:e.clientY, x0:parseFloat(el.style.getPropertyValue("--x")) || 0, y0:parseFloat(el.style.getPropertyValue("--y")) || 0, moved:false }; el.style.zIndex = ++zTop; el.style.transition = "none"; try{ el.setPointerCapture(e.pointerId); }catch(err){} });
+  document.addEventListener("pointermove", e => { if(!drag) return; const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy; if(!drag.moved && Math.hypot(dx, dy) < 6) return; drag.moved = true; e.preventDefault();
+    drag.el.style.setProperty("--x", Math.max(0, Math.min(drag.r.width - 100, drag.x0 + dx)) + "px"); drag.el.style.setProperty("--y", Math.max(0, Math.min(drag.r.height - 124, drag.y0 + dy)) + "px"); drag.el.classList.add("lifting"); });
+  const done = () => { if(!drag) return; const d = drag; drag = null; d.el.style.transition = ""; d.el.classList.remove("lifting"); if(!d.moved) return;
+    const P = S.saPos || (S.saPos = {}), old = P[d.el.dataset.cid] || {}; P[d.el.dataset.cid] = { x:(parseFloat(d.el.style.getPropertyValue("--x")) || 0) / d.r.width, y:parseFloat(d.el.style.getPropertyValue("--y")) || 0, r:old.r != null ? old.r : (Math.random() * 16 - 8), z:zTop };
+    d.el.style.setProperty("--r", P[d.el.dataset.cid].r + "deg"); d.el._justDragged = true; setTimeout(() => { d.el._justDragged = false; }, 60); snd("tap"); buzz(4); };
+  document.addEventListener("pointerup", done); document.addEventListener("pointercancel", done);
+  /* a drag is not a tap: don't open the stamp's card after moving it */
+  document.addEventListener("click", e => { const el = e.target.closest(".sa-board.free .sa-st"); if(el && el._justDragged){ e.stopImmediatePropagation(); e.preventDefault(); } }, true); }
+
+/* ===================== 1. 今日刮刮卡：首页每天一张，用手指刮开 ===================== */
+function scratchPool(){ const food = (todayCity() || CITIES[0] || {}).food || "当地小吃", colors = ["蓝色", "橘色", "白色", "绿色", "黄色", "粉色"];
+  return [`今天的幸运食物：${food}`, "今天你负责挑一家店，大家都要听你的", "拍一张旅伴的背影，晚上再给他看", `今天的幸运颜色：${colors[new Date().getDate() % colors.length]}，穿到就加分`, "免排队券：今天可以理直气壮地先点一次单", "找一个当地人问路，就算你知道怎么走", "喝一杯当地的饮料，猜猜它叫什么", "好运加倍：今天打的第一个卡，心里算两次", "请旅伴吃一样小东西，不用说为什么", "今天走路时数一数，看到几只猫"]; }
+function scratchToday(){ const P = scratchPool(); let h = 0; for(const ch of TDATE() + (S.me || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return { idx:h % P.length, text:P[h % P.length], done: !!(S.scratch && S.scratch.date === TDATE() && S.scratch.done) }; }
+function scratchHTML(){ if(!DAYS.length || PHASE === "after") return ""; const t = scratchToday();
+  return `<div class="scr-card${t.done ? " done" : ""}" id="scratch"><div class="scr-res"><small>今日刮刮卡 · ${md(TDATE())}</small><b>${escT(t.text)}</b>${t.done ? `<em>明天再来刮新的一张</em>` : ""}</div>${t.done ? "" : `<canvas id="scrcv" aria-label="用手指刮开今天的刮刮卡"></canvas>`}</div>`; }
+function scratchBind(){ const cv = $("scrcv"); if(!cv || cv._b) return; cv._b = true; const box = cv.parentElement, r = box.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  cv.width = r.width * dpr; cv.height = r.height * dpr; const x = cv.getContext("2d"); x.scale(dpr, dpr);
+  const g = x.createLinearGradient(0, 0, r.width, r.height); g.addColorStop(0, "#C9CDD4"); g.addColorStop(.5, "#EEF0F3"); g.addColorStop(1, "#AEB4BD"); x.fillStyle = g; x.fillRect(0, 0, r.width, r.height);
+  x.strokeStyle = "rgba(255,255,255,.35)"; x.lineWidth = 1; for(let k = -r.height; k < r.width; k += 9){ x.beginPath(); x.moveTo(k, 0); x.lineTo(k + r.height, r.height); x.stroke(); }
+  x.fillStyle = "#6B7280"; x.font = `700 16px -apple-system, "PingFang SC", sans-serif`; x.textAlign = "center"; x.fillText("✦ 用手指刮开今天的刮刮卡 ✦", r.width / 2, r.height / 2 + 6);
+  x.globalCompositeOperation = "destination-out"; x.strokeStyle = x.fillStyle = "#000"; x.lineCap = x.lineJoin = "round"; x.lineWidth = 30; let last = null, n = 0, over = false;
+  if(!window.SCRP || SCRP.date !== TDATE()) window.SCRP = { date:TDATE(), strokes:[] };
+  SCRP.strokes.forEach(st => { x.beginPath(); st.forEach(([px, py], i) => i ? x.lineTo(px, py) : x.moveTo(px, py)); x.stroke(); if(st.length === 1){ x.beginPath(); x.arc(st[0][0], st[0][1], 15, 0, 7); x.fill(); } });
+  const pt = e => { const b = cv.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+  const check = () => { const d = x.getImageData(0, 0, cv.width, cv.height).data; let clear = 0, tot = 0; for(let i = 3; i < d.length; i += 64){ tot++; if(d[i] < 40) clear++; } if(clear / tot > .5) reveal(); };
+  const reveal = () => { if(over) return; over = true; cv.style.transition = "opacity .5s"; cv.style.opacity = 0; setTimeout(() => cv.remove(), 520); S.scratch = { date:TDATE(), done:true }; box.classList.add("done"); snd("success"); buzz([10, 40, 10]); typeof confetti === "function" && confetti(); };
+  cv.addEventListener("pointerdown", e => { e.preventDefault(); try{ cv.setPointerCapture(e.pointerId); }catch(err){} last = pt(e); SCRP.strokes.push([last]); x.beginPath(); x.arc(last[0], last[1], 15, 0, 7); x.fill(); });
+  cv.addEventListener("pointermove", e => { if(!last) return; const p = pt(e); x.beginPath(); x.moveTo(last[0], last[1]); x.lineTo(p[0], p[1]); x.stroke(); last = p; const cur = SCRP.strokes[SCRP.strokes.length - 1]; cur && cur.push(p); if(++n % 6 === 0){ check(); if(n % 18 === 0) buzz(2); } });
+  const up = () => { last = null; check(); }; cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up); if(SCRP.strokes.length) check(); }
+
+/* ===================== 2. 按住盖章：按越久墨越深 ===================== */
+{ let t0 = 0, raf = 0;
+  document.addEventListener("pointerdown", e => { const b = e.target.closest(".pressstamp"); if(!b) return; t0 = performance.now(); const ink = b.querySelector(".ink");
+    const tick = () => { const k = Math.min(1, (performance.now() - t0) / 1100); ink && (ink.style.transform = `scaleX(${k})`); if(k >= 1 && !b._full){ b._full = true; buzz(12); } if(t0) raf = requestAnimationFrame(tick); }; b._full = false; tick(); });
+  const up = e => { if(!t0) return; const b = e.target.closest && e.target.closest(".pressstamp"); const held = performance.now() - t0; t0 = 0; cancelAnimationFrame(raf); document.querySelectorAll(".pressstamp .ink").forEach(i => i.style.transform = "");
+    if(!b) return; CK.ink = Math.max(.45, Math.min(1, .45 + held / 1100 * .55)); stampSlam(CK.ink); };
+  document.addEventListener("pointerup", up, true); document.addEventListener("pointercancel", () => { t0 = 0; cancelAnimationFrame(raf); }); }
+function stampSlam(ink){ const it = DAYS[CK.di] && DAYS[CK.di].items[CK.ii]; const el = document.createElement("div"); el.className = "slam"; el.setAttribute("aria-hidden", "true");
+  el.innerHTML = `<svg viewBox="0 0 200 200" style="opacity:${ink}"><g fill="none" stroke="#C8343A" stroke-width="6"><circle cx="100" cy="100" r="86"/><circle cx="100" cy="100" r="70" stroke-width="2.5"/></g><g fill="#C8343A" text-anchor="middle" font-family="-apple-system, PingFang SC, sans-serif"><text x="100" y="92" font-size="30" font-weight="900">已打卡</text><text x="100" y="124" font-size="15" font-weight="700">${escT(((it && it.title) || "").replace(/ · .*/, "").slice(0, 8))}</text><text x="100" y="146" font-size="12" letter-spacing="2">${TDATE().replace(/-/g, ".")}</text></g></svg>`;
+  document.getElementById("app").appendChild(el); buzz(ink > .9 ? [20, 30, 40] : [14]); snd("stamp"); setTimeout(() => el.classList.add("out"), 900); setTimeout(() => el.remove(), 1400); }
+
+/* ===================== 3. 摇一摇，票根换个样子 ===================== */
+let spShake = null;
+function stubRemix(){ const st = S.stubs[SP]; if(!st) return; const keys = Object.keys(STUB_FX).filter(k => k !== (st.fx || "none")); st.fx = keys[Math.floor(Math.random() * keys.length)]; st.pm = Math.random() < .6; st.pmd = st.pmd || TDATE();
+  openStubPop(SP); NOSTAG = true; const keep = SP; render(); SP = keep; toast(`换成「${STUB_FX[st.fx][0]}」${st.pm ? " · 盖了邮戳" : ""}`); buzz([8, 20, 8]); }
+function stubShake(on){ if(!on){ spShake && spShake.stop(); spShake = null; return; } if(spShake || typeof onMotion !== "function") return;
+  const req = typeof DeviceMotionEvent !== "undefined" && typeof DeviceMotionEvent.requestPermission === "function" ? DeviceMotionEvent.requestPermission().catch(() => "denied") : Promise.resolve("granted");
+  req.then(r => { if(r !== "granted" || spShake) return; let prev = null, cool = 0; spShake = onMotion(a => { const v = [a.x || 0, a.y || 0, a.z || 0]; if(prev){ const d = Math.abs(v[0] - prev[0]) + Math.abs(v[1] - prev[1]) + Math.abs(v[2] - prev[2]); if(d > 30 && Date.now() > cool && !SPE){ cool = Date.now() + 1200; stubRemix(); } } prev = v; }); }); }
+document.addEventListener("click", e => { if(e.target.closest('[data-act="spremix"]')) stubRemix(); });
+
+/* ===================== 4. 旅行明信片：把票根排成一张，可以存 ===================== */
+async function postcardPNG(){ const W = 1600, H = 1100, c = document.createElement("canvas"); c.width = W; c.height = H; const x = c.getContext("2d");
+  x.fillStyle = "#F6F1E6"; x.fillRect(0, 0, W, H); x.strokeStyle = "rgba(120,100,80,.18)"; x.lineWidth = 2; x.strokeRect(28, 28, W - 56, H - 56);
+  const pick = S.stubs.slice().sort((a, b) => (b.holo ? 2 : 0) + (b.pm ? 1 : 0) - (a.holo ? 2 : 0) - (a.pm ? 1 : 0)).slice(0, 4);
+  const load = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  const SL = { 1:[[470, 550, -4]], 2:[[430, 330, -5], [500, 760, 4]], 3:[[400, 260, -5], [560, 560, 4], [400, 860, -3]], 4:[[300, 300, -5], [680, 380, 4], [320, 760, 3], [690, 820, -4]] }[pick.length] || [];
+  for(let k = 0; k < pick.length; k++){ try{ const im = await load(await stubPNG(pick[k])), w = pick[k].layout === "v" ? (pick.length > 2 ? 260 : 320) : (pick.length > 2 ? 400 : 560), h = w * im.height / im.width, [cx, cy, rot] = SL[k];
+    x.save(); x.translate(cx, cy); x.rotate(rot * Math.PI / 180); x.shadowColor = "rgba(0,0,0,.25)"; x.shadowBlur = 24; x.shadowOffsetY = 10; x.drawImage(im, -w / 2, -h / 2, w, h); x.restore(); }catch(e){} }
+  x.strokeStyle = "rgba(120,100,80,.35)"; x.lineWidth = 3; x.beginPath(); x.moveTo(980, 120); x.lineTo(980, H - 120); x.stroke();
+  const L = 1030, R = W - 90, MW = R - L, fit = (t, size, weight, fam) => { let z = size; do{ x.font = `${weight} ${z}px ${fam}`; z -= 2; } while(x.measureText(t).width > MW && z > 18); };
+  const wrap = (t, y, lh, max) => { let line = "", n = 0; for(const ch of t){ if(x.measureText(line + ch).width > MW){ x.fillText(line, L, y + n * lh); line = ch; if(++n >= max) return; } else line += ch; } if(line) x.fillText(line, L, y + n * lh); };
+  x.strokeStyle = "#B9A98F"; x.setLineDash([10, 8]); x.lineWidth = 3; x.strokeRect(R - 200, 90, 200, 240); x.setLineDash([]);
+  try{ const st = pick[0]; if(st){ const im = await load(st.src); const s2 = Math.max(184 / im.width, 224 / im.height); x.save(); x.beginPath(); x.rect(R - 192, 98, 184, 224); x.clip(); x.drawImage(im, R - 100 - im.width * s2 / 2, 210 - im.height * s2 / 2, im.width * s2, im.height * s2); x.restore(); } }catch(e){}
+  try{ const pm = await load("data:image/svg+xml;charset=utf-8," + encodeURIComponent(postmarkSVG({ en:cityEn((CITIES[0] || {}).name) || "TRIP", pmd:TRIP.end || TDATE() }))); x.drawImage(pm, R - 470, 150, 360, 216); }catch(e){}
+  x.fillStyle = "#2B2A28"; fit(TRIP.name, 58, 700, `"Noto Serif SC", serif`); x.fillText(TRIP.name, L, 430);
+  x.fillStyle = "#6B6358"; x.font = `500 28px -apple-system, "PingFang SC", sans-serif`; x.fillText(TRIP.rangeCN || "", L, 478);
+  const nc = new Set(DAYS.map(d => d.city)).size; fit(`${DAYS.length} 天 · ${nc} 个城市 · ${okCheckins().length} 个章 · ${S.stubs.length} 张票根`, 28, 500, `-apple-system, "PingFang SC", sans-serif`); x.fillText(`${DAYS.length} 天 · ${nc} 个城市 · ${okCheckins().length} 个章 · ${S.stubs.length} 张票根`, L, 522);
+  x.font = `600 30px -apple-system, sans-serif`; x.fillStyle = "#2B2A28"; x.fillText("TO：未来的我们", L, 610);
+  x.strokeStyle = "rgba(70,90,140,.3)"; x.lineWidth = 2; for(let k = 0; k < 4; k++){ x.beginPath(); x.moveTo(L, 700 + k * 88); x.lineTo(R, 700 + k * 88); x.stroke(); }
+  const route = DAYS.map(d => d.city).filter((cc, i, a) => cc && cc !== a[i - 1]).join("、");
+  x.fillStyle = "#2B3A67"; x.font = `42px "Long Cang", "Ma Shan Zheng", cursive`; wrap(`这一趟，我们一起去了${route}。下次还要一起出发。`, 686, 88, 4);
+  return c.toDataURL("image/png"); }
+document.addEventListener("click", async e => { const b = e.target.closest('[data-act="postcard"], [data-act="pcsave"]'); if(!b) return;
+  if(b.dataset.act === "pcsave"){ const u = window.__pc; u && deliverImage(u, `旅行明信片-${TRIP.name}`); return; }
+  toast("正在排明信片…"); try{ const url = await postcardPNG(); window.__pc = url; sheet(`<h3>旅行明信片</h3><p class="sub">把这趟的票根排成一张，可以存起来、传给旅伴</p><img src="${url}" alt="旅行明信片" style="width:100%; border-radius:12px; margin-top:6px; box-shadow:0 10px 30px rgba(0,0,0,.4)"><div style="margin-top:14px"><button class="cbtn" data-act="pcsave">存成图片</button></div>`); snd("paper"); }catch(err){ toast("明信片做不了，再试一次"); } });
